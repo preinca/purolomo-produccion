@@ -51,3 +51,22 @@ export function formatoKg(valor: number) {
     maximumFractionDigits: 2,
   }).format(valor)} kg`;
 }
+
+export function formatoNumero(valor: number, decimales = 0) {
+  return new Intl.NumberFormat("es-VE", {
+    maximumFractionDigits: decimales,
+    minimumFractionDigits: 0,
+  }).format(valor);
+}
+
+/** Semana ISO a partir de una fecha calendario YYYY-MM-DD. */
+export function semanaDe(fecha: string) {
+  if (!fechaValida(fecha)) return "";
+  const [year, month, day] = fecha.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const weekday = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - weekday);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((date.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `SEMANA ${week}`;
+}
