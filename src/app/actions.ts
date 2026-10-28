@@ -2,38 +2,102 @@
 
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/lib/db";
-import { eliminarRegistro, insertarRegistro, validarRegistro } from "@/lib/produccion";
+import { fechaHoy, fechaValida } from "@/lib/formato";
+import {
+  insertarRecepcion,
+  registrarConsumo,
+  registrarDespacho,
+  transferirLote,
+  validarRecepcion,
+} from "@/lib/lotes";
 
-export type EstadoRegistro = { error?: string; ok?: boolean } | null;
+export type EstadoFormulario = { error?: string; ok?: boolean; tag?: string } | null;
 
 function texto(formData: FormData, campo: string) {
   const valor = formData.get(campo);
   return typeof valor === "string" ? valor : "";
 }
 
-export async function crearRegistro(
-  _estado: EstadoRegistro,
-  formData: FormData,
-): Promise<EstadoRegistro> {
-  const validado = validarRegistro({
-    fecha: texto(formData, "fecha"),
-    turno: texto(formData, "turno"),
-    linea: texto(formData, "linea"),
-    producto: texto(formData, "producto"),
-    cantidad: texto(formData, "cantidad_kg"),
-    observaciones: texto(formData, "observaciones"),
-  });
-
-  if (!validado.ok) return { error: validado.error };
-
-  insertarRegistro(getDb(), validado.value);
-  revalidatePath("/");
-  return { ok: true };
+function kilos(formData: FormData, campo: string) {
+  return Number(texto(formData, campo).replace(",", "."));
 }
 
-export async function quitarRegistro(formData: FormData) {
-  const id = Number(texto(formData, "id"));
-  if (!Number.isInteger(id) || id <= 0) return;
-  eliminarRegistro(getDb(), id);
+function refrescar() {
   revalidatePath("/");
+  revalidatePath("/stock");
+  revalidatePath("/entradas");
+  revalidatePath("/salidas");
+  revalidatePath("/consumo");
+  revalidatePath("/qr");
+  revalidatePath("/historial/entradas");
+  revalidatePath("/historial/salidas");
+}
+
+export async function crearRecepcion(
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  const validado = validarRecepcion({
+    fecha: texto(formData, "fecha"),
+    tag: texto(formData, "tag"),
+    codigo: texto(formData, "codigo"),
+    cantidad: texto(formData, "kg_recibidos"),
+  });
+  if (!validado.ok) return { error: validado.error };
+
+  const resultado = insertarRecepcion(getDb(), {
+    ...validado.value,
+    observaciones: texto(formData, "observaciones").trim().slice(0, 500),
+  });
+  if (!resultado.ok) return { error: resultado.error };
+  refrescar();
+  return { ok: true, tag: resultado.value.tag };
+}
+
+export async function validarTransferencia(formData: FormData) {
+  const tag = texto(formData, "tag");
+  const resultado = transferirLote(getDb(), tag, fechaHoy());
+  if (!resultado.ok) return;
+  refrescar();
+  revalidatePath(`/lote/${tag}`);
+}
+
+export async function crearDespacho(
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  const tag = texto(formData, "tag").trim();
+  const fecha = texto(formData, "fecha");
+  const kg = kilos(formData, "kg");
+  if (!fechaValida(fecha)) return { error: "Indica una fecha válida." };
+  const resultado = registrarDespacho(getDb(), {
+    tag,
+    fecha,
+    kg,
+    nota: texto(formData, "nota").trim().slice(0, 500),
+  });
+  if (!resultado.ok) return { error: resultado.error };
+  refrescar();
+  revalidatePath(`/lote/${tag}`);
+  return { ok: true, tag };
+}
+
+export async function crearConsumo(
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  const tag = texto(formData, "tag").trim();
+  const fecha = texto(formData, "fecha");
+  const kg = kilos(formData, "kg");
+  if (!fechaValida(fecha)) return { error: "Indica una fecha válida." };
+  const resultado = registrarConsumo(getDb(), {
+    tag,
+    fecha,
+    kg,
+    nota: texto(formData, "nota").trim().slice(0, 500),
+  });
+  if (!resultado.ok) return { error: resultado.error };
+  refrescar();
+  revalidatePath(`/lote/${tag}`);
+  return { ok: true, tag };
 }
