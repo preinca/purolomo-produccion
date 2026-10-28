@@ -20,7 +20,7 @@ export default function HelloPage() {
           href="/"
           className="mt-6 inline-flex h-8 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
         >
-          Ir a producción
+          Ir al panel de materia prima
         </Link>
       </section>
     </main>
