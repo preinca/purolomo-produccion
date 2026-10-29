@@ -1,1 +1,13 @@
-file:///workspace/src/data/lotes-pendientes.json
+[
+  {
+    "fecha": "2026-08-05",
+    "semana": "SEMANA 32",
+    "tag": "418148",
+    "producto": "Recorte #2",
+    "codigo": "PTCM02411",
+    "kgRecibidos": 735.0,
+    "kgDespachados": 0,
+    "kgConsumidos": 0,
+    "estado": "PENDIENTE POR TRANSFERIR"
+  }
+]
