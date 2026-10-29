@@ -1,0 +1,16 @@
+---
+description: Reglas del asistente para este proyecto. Se aplican en cada pedido.
+alwaysApply: true
+---
+
+# Reglas para el asistente
+
+En este proyecto estas reglas se cumplen en cada pedido. Si una regla choca con lo que el usuario pide en un mensaje, gana ese mensaje.
+
+La lista editable está en `REGLAS.md`, en la raíz del proyecto. Si ambas copias difieren, sigue `REGLAS.md` y actualiza este archivo.
+
+1. Responde en español.
+2. No uses subagentes para validar, probar pantallas ni revisar flujos, salvo que el usuario lo pida explícitamente en ese mensaje.
+3. Haz el cambio y responde directo. No recorras la aplicación pantalla por pantalla para comprobar que todo funciona, salvo que el usuario lo pida explícitamente.
+4. No alargues la respuesta con pasos de verificación que no pedí.
+5. Vas a trabajar desde el proyecto que está ubicado en la dirección de esta computadora: C:\Users\mende\OneDrive\Documents\PREINCA\PUROLOMO PRODUCCION\purolomo-produccion, para que hagas todos los cambios desde allí de manera local.
