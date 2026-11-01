@@ -50,7 +50,8 @@ export function validarCuenta(input: { nombre: string; usuario: string; clave: s
   if (input.rango !== "administrador" && input.rango !== "consulta") {
     return { ok: false as const, error: "Elige el rango administrador o consulta." };
   }
-  return { ok: true as const, value: { nombre, usuario, clave, rango: input.rango } };
+  const rango: Rango = input.rango;
+  return { ok: true as const, value: { nombre, usuario, clave, rango } };
 }
 
 export function crearUsuario(

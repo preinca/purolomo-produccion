@@ -133,7 +133,7 @@ function armarReceta(db: SqliteDb, fila: Record<string, unknown>): Receta {
   };
 }
 
-export function recetaVigente(db: SqliteDb, linea = "1", destino = ALIBAL_1K.destino): Receta | null {
+export function recetaVigente(db: SqliteDb, linea = "1", destino: string = ALIBAL_1K.destino): Receta | null {
   const lineaBuscada = linea === "2" ? "2" : "1";
   const fila = db
     .prepare("SELECT * FROM recetas WHERE destino = ? AND linea = ? ORDER BY id DESC LIMIT 1")
