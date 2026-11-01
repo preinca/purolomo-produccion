@@ -1,4 +1,6 @@
 import type { SqliteDb } from "./db";
+import { destinoValido } from "./destinos";
+import { lineaPorId } from "./lineas";
 import { fechaValida, semanaDe } from "./formato";
 import { productoPorCodigo, type EstadoLote } from "./mpc";
 
@@ -13,6 +15,7 @@ export type Lote = {
   kgConsumidos: number;
   estado: string;
   observaciones: string;
+  destino: string;
   creadoEn: string;
 };
 
@@ -25,6 +28,8 @@ export type Movimiento = {
   kg: number;
   estado: string;
   nota: string;
+  destino: string;
+  linea: string;
   creadoEn: string;
 };
 
@@ -34,6 +39,7 @@ export type NuevoLote = {
   codigo: string;
   kgRecibidos: number;
   observaciones?: string;
+  destino?: string;
 };
 
 export type Resultado<T = void> =
@@ -54,6 +60,7 @@ function filaLote(row: SqlRow): Lote {
     kgConsumidos: Number(row.kg_consumidos),
     estado: String(row.estado),
     observaciones: String(row.observaciones ?? ""),
+    destino: String(row.destino ?? ""),
     creadoEn: String(row.creado_en),
   };
 }
@@ -68,6 +75,8 @@ function filaMov(row: SqlRow): Movimiento {
     kg: Number(row.kg),
     estado: String(row.estado),
     nota: String(row.nota ?? ""),
+    destino: String(row.destino ?? ""),
+    linea: String(row.linea ?? ""),
     creadoEn: String(row.creado_en),
   };
 }
@@ -76,15 +85,30 @@ export function kgRestantes(lote: Lote) {
   return Math.round((lote.kgRecibidos - lote.kgDespachados - lote.kgConsumidos) * 1000) / 1000;
 }
 
+/** Kilos que ya salieron del TAG. La salida se guarda como despacho. */
+export function kgConsumidosDe(lote: Pick<Lote, "kgDespachados" | "kgConsumidos">) {
+  return Math.round((lote.kgDespachados + lote.kgConsumidos) * 1000) / 1000;
+}
+
+export function kgDisponiblesDe(lote: Pick<Lote, "kgRecibidos" | "kgDespachados" | "kgConsumidos">) {
+  return Math.round((lote.kgRecibidos - kgConsumidosDe(lote)) * 1000) / 1000;
+}
+
+export function tagAgotado(lote: Pick<Lote, "kgRecibidos" | "kgDespachados" | "kgConsumidos">) {
+  return kgDisponiblesDe(lote) <= 0.001;
+}
+
 export function validarRecepcion(input: {
   fecha: string;
   tag: string;
   codigo: string;
   cantidad: string;
+  destino?: string;
 }): Resultado<NuevoLote> {
   const fecha = input.fecha.trim();
   const tag = input.tag.trim();
   const codigo = input.codigo.trim();
+  const destino = (input.destino ?? "").trim();
   const kgRecibidos = Number(input.cantidad.trim().replace(",", "."));
 
   if (!fechaValida(fecha)) return { ok: false, error: "Indica una fecha válida." };
@@ -93,6 +117,9 @@ export function validarRecepcion(input: {
   }
   const producto = productoPorCodigo(codigo);
   if (!producto) return { ok: false, error: "Elige un tipo de materia prima del catálogo." };
+  if (destino && !destinoValido(destino)) {
+    return { ok: false, error: "Elige el producto y la presentación donde se va a usar." };
+  }
   if (!Number.isFinite(kgRecibidos) || kgRecibidos <= 0 || kgRecibidos > 1_000_000) {
     return { ok: false, error: "Los kilos recibidos tienen que ser mayores que 0." };
   }
@@ -103,6 +130,7 @@ export function validarRecepcion(input: {
       fecha,
       tag,
       codigo,
+      destino,
       kgRecibidos: Math.round(kgRecibidos * 1000) / 1000,
     },
   };
@@ -122,16 +150,20 @@ export function insertarRecepcion(db: SqliteDb, nuevo: NuevoLote): Resultado<Lot
 
   const producto = productoPorCodigo(nuevo.codigo);
   if (!producto) return { ok: false, error: "Producto desconocido." };
+  const destino = (nuevo.destino ?? "").trim();
+  if (destino && !destinoValido(destino)) {
+    return { ok: false, error: "Elige el producto y la presentación donde se va a usar." };
+  }
 
   const semana = semanaDe(nuevo.fecha);
-  const estado: EstadoLote = "PENDIENTE POR TRANSFERIR";
+  const estado: EstadoLote = "RECIBIDO";
 
   db.exec("BEGIN");
   try {
     db.prepare(
       `INSERT INTO lotes
-        (tag, fecha, semana, codigo, producto, kg_recibidos, kg_despachados, kg_consumidos, estado, observaciones)
-       VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`,
+        (tag, fecha, semana, codigo, producto, kg_recibidos, kg_despachados, kg_consumidos, estado, observaciones, destino)
+       VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)`,
     ).run(
       nuevo.tag,
       nuevo.fecha,
@@ -141,6 +173,7 @@ export function insertarRecepcion(db: SqliteDb, nuevo: NuevoLote): Resultado<Lot
       nuevo.kgRecibidos,
       estado,
       nuevo.observaciones ?? "",
+      destino,
     );
     db.prepare(
       `INSERT INTO movimientos (tag, tipo, fecha, semana, kg, estado)
@@ -174,11 +207,11 @@ export function listarLotes(
     .prepare(
       `SELECT * FROM lotes
        WHERE (? = '' OR estado = ?)
-         AND (? = '' OR tag LIKE ? OR producto LIKE ? OR codigo LIKE ? OR semana LIKE ?)
+         AND (? = '' OR tag LIKE ? OR producto LIKE ? OR codigo LIKE ? OR semana LIKE ? OR destino LIKE ?)
        ORDER BY fecha DESC, tag DESC
        LIMIT ?`,
     )
-    .all(estado, estado, q, like, like, like, like, limite) as SqlRow[];
+    .all(estado, estado, q, like, like, like, like, like, limite) as SqlRow[];
   return rows.map(filaLote);
 }
 
@@ -207,8 +240,8 @@ export function movimientosDeTag(db: SqliteDb, tag: string) {
 export function transferirLote(db: SqliteDb, tag: string, fecha: string): Resultado {
   const lote = buscarLote(db, tag);
   if (!lote) return { ok: false, error: "No existe ese TAG." };
-  if (lote.estado !== "PENDIENTE POR TRANSFERIR") {
-    return { ok: false, error: "Ese lote ya no está pendiente por transferir." };
+  if (lote.estado !== "RECIBIDO") {
+    return { ok: false, error: "Ese lote no se puede marcar como transferido." };
   }
   const semana = semanaDe(fecha) || lote.semana;
   db.exec("BEGIN");
@@ -228,11 +261,31 @@ export function transferirLote(db: SqliteDb, tag: string, fecha: string): Result
 
 export function registrarDespacho(
   db: SqliteDb,
-  input: { tag: string; fecha: string; kg: number; nota?: string },
-): Resultado {
+  input: {
+    tag: string;
+    fecha: string;
+    kg: number;
+    nota?: string;
+    destino: string;
+    linea: string;
+    minilote?: { pesajeId: number; tipo: string };
+  },
+): Resultado<{ token: string | null }> {
   const lote = buscarLote(db, input.tag);
   if (!lote) return { ok: false, error: "No existe ese TAG." };
-  if (input.kg <= 0) return { ok: false, error: "Los kilos despachados tienen que ser mayores que 0." };
+  if (input.kg <= 0) return { ok: false, error: "Los kilos consumidos tienen que ser mayores que 0." };
+  const destino = input.destino.trim();
+  if (!destinoValido(destino)) {
+    return { ok: false, error: "Elige el producto y la presentación donde se va a usar." };
+  }
+  const linea = lineaPorId(input.linea.trim());
+  if (!linea) return { ok: false, error: "Elige si se usa en la línea 1 o en la línea 2." };
+  if (input.kg > linea.capacidadKg) {
+    return {
+      ok: false,
+      error: `La ${linea.nombre} admite hasta ${linea.capacidadKg} kg.`,
+    };
+  }
   const resto = kgRestantes(lote);
   if (input.kg > resto + 0.001) {
     return { ok: false, error: `Solo quedan ${resto} kg en el TAG ${lote.tag}.` };
@@ -241,24 +294,42 @@ export function registrarDespacho(
   const kgDespachados = Math.round((lote.kgDespachados + input.kg) * 1000) / 1000;
   const restoFinal = Math.round((lote.kgRecibidos - kgDespachados - lote.kgConsumidos) * 1000) / 1000;
   const estado = restoFinal <= 0 ? "RECIBIDO" : lote.estado;
+  const usos = lote.destino
+    .split(" · ")
+    .map((parte) => parte.trim())
+    .filter(Boolean);
+  if (!usos.includes(destino)) usos.push(destino);
+  const destinoLote = usos.join(" · ");
 
   db.exec("BEGIN");
+  let token: string | null = null;
   try {
-    db.prepare("UPDATE lotes SET kg_despachados = ?, estado = ? WHERE tag = ?").run(
+    db.prepare("UPDATE lotes SET kg_despachados = ?, estado = ?, destino = ? WHERE tag = ?").run(
       kgDespachados,
       estado,
+      destinoLote,
       lote.tag,
     );
     db.prepare(
-      `INSERT INTO movimientos (tag, tipo, fecha, semana, kg, estado, nota)
-       VALUES (?, 'despacho', ?, ?, ?, 'RECIBIDO', ?)`,
-    ).run(lote.tag, input.fecha, semana, input.kg, input.nota ?? "");
+      `INSERT INTO movimientos (tag, tipo, fecha, semana, kg, estado, nota, destino, linea)
+       VALUES (?, 'despacho', ?, ?, ?, 'RECIBIDO', ?, ?, ?)`,
+    ).run(lote.tag, input.fecha, semana, input.kg, input.nota ?? "", destino, linea.id);
+    if (input.minilote) {
+      const correlativo = db
+        .prepare("SELECT COALESCE(MAX(CAST(SUBSTR(token, 3) AS INTEGER)), 0) AS n FROM minilotes")
+        .get() as { n: number };
+      token = `ML${String(Number(correlativo.n) + 1).padStart(6, "0")}`;
+      db.prepare(
+        `INSERT INTO minilotes (token, tag, pesaje_id, tipo, kg, destino, linea)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).run(token, lote.tag, input.minilote.pesajeId, input.minilote.tipo, input.kg, destino, linea.id);
+    }
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
   }
-  return { ok: true, value: undefined };
+  return { ok: true, value: { token } };
 }
 
 export function registrarConsumo(
@@ -320,27 +391,23 @@ export function resumir(db: SqliteDb) {
          COUNT(*) AS paletas,
          COALESCE(SUM(kg_recibidos), 0) AS kg_recibidos,
          COALESCE(SUM(kg_despachados), 0) AS kg_despachados,
-         COALESCE(SUM(kg_consumidos), 0) AS kg_consumidos,
-         COALESCE(SUM(CASE WHEN estado = 'PENDIENTE POR TRANSFERIR' THEN 1 ELSE 0 END), 0) AS pendientes
+         COALESCE(SUM(kg_consumidos), 0) AS kg_consumidos
        FROM lotes`,
     )
     .get() as
     | {
         paletas: number;
-        pendientes: number;
         kg_recibidos: number;
         kg_despachados: number;
         kg_consumidos: number;
       }
     | undefined;
   const paletas = Number(row?.paletas ?? 0);
-  const pendientes = Number(row?.pendientes ?? 0);
   const kgRecibidos = Number(row?.kg_recibidos ?? 0);
   const kgDespachados = Number(row?.kg_despachados ?? 0);
   const kgConsumidos = Number(row?.kg_consumidos ?? 0);
   return {
     paletas,
-    pendientes,
     kgRecibidos,
     kgDespachados,
     kgConsumidos,

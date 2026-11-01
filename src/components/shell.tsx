@@ -8,44 +8,55 @@ import {
   ArrowUpFromLine,
   BookOpen,
   ClipboardList,
+  FileSpreadsheet,
   History,
   LayoutDashboard,
   Menu,
   PackageSearch,
   QrCode,
+  FileSearch,
+  Rows3,
   Search,
   Trash2,
-  Utensils,
+  Users,
   X,
 } from "lucide-react";
+import { cerrarSesion } from "@/app/usuarios-acciones";
+import { BuscadorGlobal } from "@/components/buscador-global";
 import { LogoPurolomo } from "@/components/logo";
+import type { Rango } from "@/lib/acceso";
+import type { Sugerencia } from "@/lib/sugerencia";
 import { cn } from "@/lib/utils";
 
 const grupos = [
   {
     titulo: "Principal",
     items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/stock", label: "Consultar stock", icon: PackageSearch },
+      { href: "/", label: "Dashboard", icon: LayoutDashboard, admin: false },
+      { href: "/stock", label: "Consultar stock", icon: PackageSearch, admin: false },
     ],
   },
   {
     titulo: "Operaciones",
     items: [
-      { href: "/inventario", label: "Inventario inicial", icon: ClipboardList },
-      { href: "/entradas", label: "Registrar entradas", icon: ArrowDownToLine },
-      { href: "/salidas", label: "Registrar salidas", icon: ArrowUpFromLine },
-      { href: "/consumo", label: "Registrar consumo", icon: Utensils },
-      { href: "/qr", label: "Generar QR / Etiquetas", icon: QrCode },
-      { href: "/eliminar", label: "Eliminar lote", icon: Trash2 },
-      { href: "/nomenclatura", label: "Leyenda MPC", icon: BookOpen },
+      { href: "/inventario", label: "Inventario inicial", icon: ClipboardList, admin: true },
+      { href: "/entradas", label: "Registrar entradas", icon: ArrowDownToLine, admin: true },
+      { href: "/receta", label: "Cargar receta", icon: FileSpreadsheet, admin: true },
+      { href: "/salidas", label: "Registrar salidas", icon: ArrowUpFromLine, admin: false },
+      { href: "/pesajes", label: "Registro de pesajes", icon: Rows3, admin: false },
+      { href: "/minilotes", label: "Buscar mini lote", icon: Search, admin: false },
+      { href: "/consulta-pesaje", label: "Buscar pesaje", icon: FileSearch, admin: false },
+      { href: "/qr", label: "Generar QR / Etiquetas", icon: QrCode, admin: false },
+      { href: "/eliminar", label: "Eliminar lote", icon: Trash2, admin: true },
+      { href: "/usuarios", label: "Usuarios", icon: Users, admin: true },
+      { href: "/nomenclatura", label: "Leyenda MPC", icon: BookOpen, admin: false },
     ],
   },
   {
     titulo: "Historiales",
     items: [
-      { href: "/historial/entradas", label: "Hist. entradas", icon: History },
-      { href: "/historial/salidas", label: "Hist. salidas", icon: History },
+      { href: "/historial/entradas", label: "Hist. entradas", icon: History, admin: false },
+      { href: "/historial/salidas", label: "Hist. salidas", icon: History, admin: false },
     ],
   },
 ];
@@ -60,8 +71,24 @@ function cerrarMenu() {
   if (el instanceof HTMLInputElement) el.checked = false;
 }
 
-export function Shell({ children }: { children: React.ReactNode }) {
+export function Shell({
+  children,
+  sugerencias,
+  nombre,
+  rango,
+}: {
+  children: React.ReactNode;
+  sugerencias: Sugerencia[];
+  nombre: string;
+  rango: Rango;
+}) {
   const pathname = usePathname();
+  const menu = grupos
+    .map((grupo) => ({
+      ...grupo,
+      items: grupo.items.filter((item) => rango === "administrador" || !item.admin),
+    }))
+    .filter((grupo) => grupo.items.length > 0);
 
   useEffect(() => {
     cerrarMenu();
@@ -88,7 +115,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </label>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 pb-6">
-          {grupos.map((grupo) => (
+          {menu.map((grupo) => (
             <div key={grupo.titulo} className="mb-4">
               <p className="px-3 pb-1.5 text-[10px] font-semibold tracking-[0.16em] text-white/40 uppercase">
                 {grupo.titulo}
@@ -133,24 +160,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
           >
             <Menu className="size-5" />
           </label>
-          <form action="/stock" className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              name="q"
-              placeholder="Buscar producto, TAG o código…"
-              className="h-9 w-full rounded-lg border border-input bg-background pr-3 pl-8 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            />
-          </form>
-          <div className="hidden items-center gap-2 sm:flex">
-            <div className="text-right">
-              <p className="text-xs font-semibold leading-tight">Planta Cagua</p>
+          <BuscadorGlobal sugerencias={sugerencias} />
+          <div className="flex items-center gap-2">
+            <div className="hidden text-right sm:block">
+              <p className="text-xs font-semibold leading-tight">{nombre}</p>
               <p className="text-[10px] tracking-wide text-muted-foreground uppercase">
-                Almacén producción
+                {rango === "administrador" ? "Administrador" : "Consulta"}
               </p>
             </div>
-            <span className="grid size-9 place-items-center rounded-full bg-purolomo-red text-xs font-bold text-white">
-              PL
-            </span>
+            <form action={cerrarSesion}>
+              <button type="submit" className="h-8 rounded-lg border px-2.5 text-sm font-medium hover:bg-muted">
+                Salir
+              </button>
+            </form>
           </div>
         </header>
         <div className="relative flex-1 bg-white">{children}</div>

@@ -1,5 +1,5 @@
 import { renderSVG } from "uqr";
-import type { Lote } from "./lotes";
+import { kgConsumidosDe, kgDisponiblesDe, tagAgotado, type Lote } from "./lotes";
 import { productoPorCodigo } from "./mpc";
 
 export type PayloadQr = {
@@ -14,6 +14,7 @@ export type PayloadQr = {
   kgDespachados: number;
   kgConsumidos: number;
   estado: string;
+  destino: string;
 };
 
 export function payloadQr(lote: Lote): PayloadQr {
@@ -30,12 +31,22 @@ export function payloadQr(lote: Lote): PayloadQr {
     kgDespachados: lote.kgDespachados,
     kgConsumidos: lote.kgConsumidos,
     estado: lote.estado,
+    destino: lote.destino,
   };
 }
 
-export function textoQr(lote: Lote) {
+export type RetiroEnQr = {
+  token: string;
+  kg: number;
+  tipo: string;
+  pesaje: number;
+  linea: string;
+  destino: string;
+};
+
+export function textoQr(lote: Lote, retiros: RetiroEnQr[] = []) {
   const p = payloadQr(lote);
-  return [
+  const lineas = [
     "PUROLOMO MPC",
     `TAG:${p.tag}`,
     `Fecha:${p.fecha}`,
@@ -44,10 +55,20 @@ export function textoQr(lote: Lote) {
     `Tipo:${p.tipo}`,
     `Codigo:${p.codigo}`,
     `Kg rec:${p.kgRecibidos}`,
-    `Kg desp:${p.kgDespachados}`,
-    `Kg cons:${p.kgConsumidos}`,
+    `Kg consumidos:${kgConsumidosDe(lote)}`,
+    `Kg disponibles:${kgDisponiblesDe(lote)}`,
     `Estado:${p.estado}`,
-  ].join("\n");
+    `Uso:${p.destino}`,
+  ];
+  if (tagAgotado(lote)) {
+    lineas.push("Aviso:Se acabaron todos los kg de esta materia prima");
+  }
+  for (const retiro of retiros) {
+    lineas.push(
+      `Mini:${retiro.token} ${retiro.kg} kg ${retiro.tipo} pesaje ${retiro.pesaje} linea ${retiro.linea} para ${retiro.destino}`,
+    );
+  }
+  return lineas.join("\n");
 }
 
 export type LecturaQr = {
@@ -75,12 +96,45 @@ export function leerTextoQr(texto: string): LecturaQr | null {
   };
 }
 
-export function svgQr(lote: Lote, pixelSize = 4) {
-  return renderSVG(textoQr(lote), {
+export function textoQrMiniLote(datos: {
+  token: string;
+  pesaje: number;
+  destino: string;
+  linea: string;
+  tipo: string;
+  kg: number;
+  tag: string;
+  tags: string[];
+}) {
+  return [
+    "PUROLOMO CONSUMO",
+    `TOKEN:${datos.token}`,
+    `PESAJE:${datos.pesaje}`,
+    `Producto:${datos.destino}`,
+    `Linea:${datos.linea}`,
+    `MPC:${datos.tipo}`,
+    `Kg:${datos.kg}`,
+    `TAG:${datos.tag}`,
+    `TAGS:${datos.tags.join(",")}`,
+  ].join("\n");
+}
+
+export function leerConsumoQr(texto: string) {
+  const token = texto.match(/TOKEN:\s*(ML\d{6})/i)?.[1]?.toUpperCase();
+  if (!token) return null;
+  return { token };
+}
+
+export function svgDeTexto(texto: string, pixelSize = 3) {
+  return renderSVG(texto, {
     border: 2,
     ecc: "M",
     pixelSize,
     blackColor: "#071422",
     whiteColor: "#ffffff",
   });
+}
+
+export function svgQr(lote: Lote, pixelSize = 4, retiros: RetiroEnQr[] = []) {
+  return svgDeTexto(textoQr(lote, retiros), pixelSize);
 }

@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { loteActualDesdeQr, type LoteLeido } from "@/app/actions";
+import { loteActualDesdeQr, type ConsumoLeido, type LoteLeido } from "@/app/actions";
 import { cargarImagen, decodificarImagen } from "@/components/decodificar-imagen-qr";
 import { EstadoBadge } from "@/components/estado-badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatoFecha, formatoKg } from "@/lib/formato";
+import { kgConsumidosDe, kgDisponiblesDe, tagAgotado } from "@/lib/lotes";
 
 export function LectorQr() {
   const [lote, setLote] = useState<LoteLeido | null>(null);
+  const [consumo, setConsumo] = useState<ConsumoLeido | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [leyendo, setLeyendo] = useState(false);
 
@@ -17,6 +19,7 @@ export function LectorQr() {
     setLeyendo(true);
     setError(null);
     setLote(null);
+    setConsumo(null);
     const url = URL.createObjectURL(archivo);
     try {
       const imagen = await cargarImagen(url);
@@ -28,6 +31,10 @@ export function LectorQr() {
       const actual = await loteActualDesdeQr(contenido);
       if (!actual.ok) {
         setError(actual.error);
+        return;
+      }
+      if ("consumo" in actual) {
+        setConsumo(actual.consumo);
         return;
       }
       setLote(actual.lote);
@@ -74,6 +81,7 @@ export function LectorQr() {
             <Dato etiqueta="Producto" valor={lote.producto} />
             <Dato etiqueta="Tipo" valor={lote.tipo || "—"} />
             <Dato etiqueta="Código" valor={lote.codigo} />
+            <Dato etiqueta="Para" valor={lote.destino || "—"} />
             <div>
               <dt className="text-[11px] tracking-wide text-muted-foreground uppercase">Estado</dt>
               <dd className="mt-1">
@@ -81,9 +89,41 @@ export function LectorQr() {
               </dd>
             </div>
             <Dato etiqueta="Kg recibidos" valor={formatoKg(lote.kgRecibidos)} />
-            <Dato etiqueta="Kg despachados" valor={formatoKg(lote.kgDespachados)} />
-            <Dato etiqueta="Kg consumidos" valor={formatoKg(lote.kgConsumidos)} />
-            <Dato etiqueta="Kg restantes" valor={formatoKg(lote.kgRestantes)} />
+            <Dato etiqueta="Kg consumidos" valor={formatoKg(kgConsumidosDe(lote))} />
+            <Dato etiqueta="Kg disponibles" valor={formatoKg(kgDisponiblesDe(lote))} />
+            {tagAgotado(lote) ? (
+              <div className="col-span-2">
+                <dt className="text-[11px] tracking-wide text-muted-foreground uppercase">Aviso</dt>
+                <dd className="mt-1 font-medium">
+                  Se acabaron todos los kg de esta materia prima. El QR se conserva para la trazabilidad.
+                </dd>
+              </div>
+            ) : null}
+            {lote.minilotes.length > 0 ? (
+              <div className="col-span-2">
+                <dt className="text-[11px] tracking-wide text-muted-foreground uppercase">Mini lotes</dt>
+                <dd className="mt-1 grid gap-1">
+                  {lote.minilotes.map((mini) => (
+                    <span key={mini.token}>
+                      {mini.token}: {formatoKg(mini.kg)} de {mini.tipo} · pesaje {mini.pesaje} · línea {mini.linea} · para{" "}
+                      {mini.destino}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+        ) : null}
+        {consumo ? (
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg bg-muted px-3 py-3 text-sm">
+            <Dato etiqueta="Token" valor={consumo.token} />
+            <Dato etiqueta="Pesaje" valor={String(consumo.pesaje)} />
+            <Dato etiqueta="Producto" valor={consumo.destino} />
+            <Dato etiqueta="Línea" valor={consumo.linea} />
+            <Dato etiqueta="MPC" valor={consumo.tipo} />
+            <Dato etiqueta="Kg" valor={formatoKg(consumo.kg)} />
+            <Dato etiqueta="TAG de origen" valor={consumo.tag} />
+            <Dato etiqueta="Tags del pesaje" valor={consumo.tags} />
           </dl>
         ) : null}
       </CardContent>

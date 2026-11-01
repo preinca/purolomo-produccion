@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DESTINOS } from "@/lib/destinos";
 import { formatoKg } from "@/lib/formato";
+import { LINEAS } from "@/lib/lineas";
 
 export function MovimientoForm({
   tipo,
@@ -25,6 +27,8 @@ export function MovimientoForm({
   );
   const [tag, setTag] = useState(tagInicial);
   const [lectura, setLectura] = useState<LoteLeido | null>(null);
+  const [linea, setLinea] = useState("");
+  const lineaElegida = LINEAS.find((item) => item.id === linea) ?? null;
 
   useEffect(() => {
     if (tagInicial) setTag(tagInicial);
@@ -44,7 +48,7 @@ export function MovimientoForm({
         <p className="rounded-lg bg-muted px-3 py-2 text-sm">
           Paleta {lectura.tag}
           {lectura.producto ? ` · ${lectura.producto}` : ""}
-          {lectura.tipo ? ` · ${lectura.tipo}` : ""}. Despachados: {formatoKg(lectura.kgDespachados)}. Restantes: {formatoKg(lectura.kgRestantes)}. Indica los kilos que salen ahora.
+          {lectura.tipo ? ` · ${lectura.tipo}` : ""}. Consumidos: {formatoKg(lectura.kgDespachados)}. Restantes: {formatoKg(lectura.kgRestantes)}. Indica los kilos que salen ahora.
         </p>
       ) : null}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -64,7 +68,7 @@ export function MovimientoForm({
           <Input id="fecha" name="fecha" type="date" required defaultValue={hoy} />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="kg">Kg {tipo === "despacho" ? "despachados" : "consumidos"}</Label>
+          <Label htmlFor="kg">Kg consumidos</Label>
           <Input
             id="kg"
             name="kg"
@@ -77,6 +81,53 @@ export function MovimientoForm({
           />
         </div>
       </div>
+      {tipo === "despacho" ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="destino">Producto y presentación</Label>
+            <select
+              id="destino"
+              name="destino"
+              required
+              defaultValue=""
+              className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="">Elige un producto…</option>
+              {DESTINOS.map((destino) => (
+                <option key={destino} value={destino}>
+                  {destino}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Indica en qué producto se va a consumir esta materia prima.
+            </p>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="linea">Línea</Label>
+            <select
+              id="linea"
+              name="linea"
+              required
+              value={linea}
+              onChange={(event) => setLinea(event.target.value)}
+              className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="">Elige una línea…</option>
+              {LINEAS.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.nombre} · hasta {formatoKg(item.capacidadKg)}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {lineaElegida
+                ? `${lineaElegida.nombre} admite hasta ${formatoKg(lineaElegida.capacidadKg)} en esta salida.`
+                : "Línea 1 hasta 1800 kg. Línea 2 hasta 3600 kg."}
+            </p>
+          </div>
+        </div>
+      ) : null}
       <div className="grid gap-1.5">
         <Label htmlFor="nota">Nota</Label>
         <Textarea id="nota" name="nota" maxLength={500} placeholder="Destino, receta o novedad" />

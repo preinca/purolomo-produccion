@@ -1,11 +1,11 @@
 import { formatoFecha, formatoKg } from "@/lib/formato";
+import { kgConsumidosDe, kgDisponiblesDe, tagAgotado, type Lote } from "@/lib/lotes";
 import { productoPorCodigo } from "@/lib/mpc";
-import { svgQr } from "@/lib/qr";
-import type { Lote } from "@/lib/lotes";
+import { svgQr, type RetiroEnQr } from "@/lib/qr";
 
-export function QrEtiqueta({ lote }: { lote: Lote }) {
+export function QrEtiqueta({ lote, retiros = [] }: { lote: Lote; retiros?: RetiroEnQr[] }) {
   const tipo = productoPorCodigo(lote.codigo);
-  const svg = svgQr(lote, 3);
+  const svg = svgQr(lote, 3, retiros);
   return (
     <article className="break-inside-avoid rounded-xl border bg-white p-4 text-[#071422]">
       <div className="flex items-start justify-between gap-3 border-b pb-2">
@@ -33,10 +33,26 @@ export function QrEtiqueta({ lote }: { lote: Lote }) {
           <Dato etiqueta="Código" valor={lote.codigo} />
           <Dato etiqueta="Estado" valor={lote.estado} />
           <Dato etiqueta="Kg rec." valor={formatoKg(lote.kgRecibidos)} />
-          <Dato etiqueta="Kg desp." valor={formatoKg(lote.kgDespachados)} />
-          <Dato etiqueta="Kg cons." valor={formatoKg(lote.kgConsumidos)} />
+          <Dato etiqueta="Kg consumidos" valor={formatoKg(kgConsumidosDe(lote))} />
+          <Dato etiqueta="Kg disponibles" valor={formatoKg(kgDisponiblesDe(lote))} />
+          <Dato etiqueta="Para" valor={lote.destino || "—"} />
         </dl>
       </div>
+      {tagAgotado(lote) ? (
+        <p className="mt-3 rounded-md bg-neutral-100 px-2 py-1.5 text-[11px] font-medium">
+          Se acabaron todos los kg de esta materia prima. El QR se conserva para la trazabilidad.
+        </p>
+      ) : null}
+      {retiros.length > 0 ? (
+        <ul className="mt-3 grid gap-1 border-t pt-2 text-[11px]">
+          {retiros.map((retiro) => (
+            <li key={retiro.token}>
+              Mini lote {retiro.token}: {formatoKg(retiro.kg)} de {retiro.tipo} · pesaje {retiro.pesaje} · línea{" "}
+              {retiro.linea} · para {retiro.destino}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="mt-3 print:hidden">
         <a
           href={`/qr/imagen/${lote.tag}`}

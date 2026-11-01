@@ -9,16 +9,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatoFecha, formatoKg } from "@/lib/formato";
-import type { Lote } from "@/lib/lotes";
-import { kgRestantes } from "@/lib/lotes";
+import { kgConsumidosDe, kgDisponiblesDe, type Lote } from "@/lib/lotes";
 import { productoPorCodigo } from "@/lib/mpc";
 
 export function TablaLotes({
   lotes,
   vacio,
+  mostrarEstado = true,
 }: {
   lotes: Lote[];
   vacio: string;
+  mostrarEstado?: boolean;
 }) {
   if (lotes.length === 0) {
     return (
@@ -38,10 +39,9 @@ export function TablaLotes({
           <TableHead>Producto</TableHead>
           <TableHead>Código</TableHead>
           <TableHead className="text-right">Kg rec.</TableHead>
-          <TableHead className="text-right">Kg desp.</TableHead>
-          <TableHead className="text-right">Kg cons.</TableHead>
-          <TableHead className="text-right">Restan</TableHead>
-          <TableHead>Estado</TableHead>
+          <TableHead className="text-right">Kg consumidos</TableHead>
+          <TableHead className="text-right">Kg disponibles</TableHead>
+          {mostrarEstado ? <TableHead>Estado</TableHead> : null}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -61,15 +61,19 @@ export function TablaLotes({
                 <div className="text-xs text-muted-foreground">
                   {tipo ? `${tipo.tipo} · ${tipo.descripcion}` : ""}
                 </div>
+                {lote.destino ? (
+                  <div className="text-xs text-muted-foreground">Para {lote.destino}</div>
+                ) : null}
               </TableCell>
               <TableCell className="font-mono text-xs">{lote.codigo}</TableCell>
               <TableCell className="text-right tabular-nums">{formatoKg(lote.kgRecibidos)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatoKg(lote.kgDespachados)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatoKg(lote.kgConsumidos)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatoKg(kgRestantes(lote))}</TableCell>
-              <TableCell>
-                <EstadoBadge estado={lote.estado} />
-              </TableCell>
+              <TableCell className="text-right tabular-nums">{formatoKg(kgConsumidosDe(lote))}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatoKg(kgDisponiblesDe(lote))}</TableCell>
+              {mostrarEstado ? (
+                <TableCell>
+                  <EstadoBadge estado={lote.estado} />
+                </TableCell>
+              ) : null}
             </TableRow>
           );
         })}

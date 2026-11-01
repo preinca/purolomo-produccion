@@ -14,18 +14,17 @@ type LoteSemilla = {
   estado: string;
 };
 
-export function sembrarSiVacia(db: SqliteDb) {
-  const productos = Number(
-    (db.prepare("SELECT COUNT(*) AS n FROM productos").get() as { n: number } | undefined)?.n ?? 0,
+export function asegurarCatalogo(db: SqliteDb) {
+  const insertar = db.prepare(
+    "INSERT OR IGNORE INTO productos (codigo, nombre, tipo, descripcion) VALUES (?, ?, ?, ?)",
   );
-  if (productos === 0) {
-    const insertar = db.prepare(
-      "INSERT INTO productos (codigo, nombre, tipo, descripcion) VALUES (?, ?, ?, ?)",
-    );
-    for (const producto of PRODUCTOS_MPC) {
-      insertar.run(producto.codigo, producto.nombre, producto.tipo, producto.descripcion);
-    }
+  for (const producto of PRODUCTOS_MPC) {
+    insertar.run(producto.codigo, producto.nombre, producto.tipo, producto.descripcion);
   }
+}
+
+export function sembrarSiVacia(db: SqliteDb) {
+  asegurarCatalogo(db);
 
   const lotes = Number(
     (db.prepare("SELECT COUNT(*) AS n FROM lotes").get() as { n: number } | undefined)?.n ?? 0,

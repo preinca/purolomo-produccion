@@ -60,6 +60,13 @@ export function EscanerSalida({ onLeido }: { onLeido: (lectura: LoteLeido) => vo
             setCamara(false);
             return;
           }
+          if (!("lote" in actual)) {
+            setError("Ese QR es de un consumo ya retirado. Escanea el QR del TAG que está en la cava.");
+            streamRef.current?.getTracks().forEach((pista) => pista.stop());
+            streamRef.current = null;
+            setCamara(false);
+            return;
+          }
           onLeidoRef.current(actual.lote);
           streamRef.current?.getTracks().forEach((pista) => pista.stop());
           streamRef.current = null;
@@ -106,12 +113,16 @@ export function EscanerSalida({ onLeido }: { onLeido: (lectura: LoteLeido) => vo
       const imagen = await cargarImagen(url);
       const texto = decodificarImagen(imagen);
       if (!texto) {
-        setError("Esa imagen no tiene el QR de una paleta.");
+        setError("Esa imagen no tiene el QR de un TAG.");
         return;
       }
       const actual = await loteActualDesdeQr(texto);
       if (!actual.ok) {
         setError(actual.error);
+        return;
+      }
+      if (!("lote" in actual)) {
+        setError("Ese QR es de un consumo ya retirado. Escanea el QR del TAG que está en la cava.");
         return;
       }
       onLeido(actual.lote);
@@ -125,7 +136,7 @@ export function EscanerSalida({ onLeido }: { onLeido: (lectura: LoteLeido) => vo
 
   return (
     <div className="grid gap-2 rounded-lg border border-dashed px-3 py-3">
-      <p className="text-sm font-medium">Escanear el QR de la paleta</p>
+      <p className="text-sm font-medium">Escanear el QR del TAG</p>
       <p className="text-xs text-muted-foreground">
         Usa el mismo QR de la recepción. Al leerlo se completa el TAG para descontar los kilos de esta salida.
       </p>

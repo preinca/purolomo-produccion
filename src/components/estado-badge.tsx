@@ -2,9 +2,7 @@ import { cn } from "@/lib/utils";
 
 export function EstadoBadge({ estado }: { estado: string }) {
   const tono =
-    estado === "PENDIENTE POR TRANSFERIR"
-      ? "bg-amber-100 text-amber-800"
-      : estado === "TRANSFIRIO"
+    estado === "TRANSFIRIO"
         ? "bg-sky-100 text-sky-800"
         : estado === "RECIBIDO"
           ? "bg-primary/10 text-primary"

@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Suspense } from "react";
-import { Shell } from "@/components/shell";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,11 +23,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} min-h-dvh antialiased`}
     >
-      <body className="min-h-dvh">
-        <Suspense fallback={<div className="min-h-full bg-background">{children}</div>}>
-          <Shell>{children}</Shell>
-        </Suspense>
-      </body>
+      <body className="min-h-dvh">{children}</body>
     </html>
   );
 }

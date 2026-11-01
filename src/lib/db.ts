@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { sembrarSiVacia } from "./seed";
+import { asegurarCatalogo, sembrarSiVacia } from "./seed";
 
 export type SqliteDb = Database.Database;
 
@@ -44,6 +44,7 @@ export function abrirBase(archivo: string) {
       kg_consumidos REAL NOT NULL DEFAULT 0 CHECK (kg_consumidos >= 0),
       estado TEXT NOT NULL,
       observaciones TEXT NOT NULL DEFAULT '',
+      destino TEXT NOT NULL DEFAULT '',
       creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
@@ -56,6 +57,8 @@ export function abrirBase(archivo: string) {
       kg REAL NOT NULL CHECK (kg >= 0),
       estado TEXT NOT NULL,
       nota TEXT NOT NULL DEFAULT '',
+      destino TEXT NOT NULL DEFAULT '',
+      linea TEXT NOT NULL DEFAULT '',
       creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
@@ -65,13 +68,85 @@ export function abrirBase(archivo: string) {
     CREATE INDEX IF NOT EXISTS idx_mov_tag ON movimientos (tag, id DESC);
     CREATE INDEX IF NOT EXISTS idx_mov_tipo ON movimientos (tipo, fecha DESC);
   `);
+  asegurarEsquema(db);
   sembrarSiVacia(db);
   return db;
+}
+
+function asegurarEsquema(db: SqliteDb) {
+  asegurarColumna(db, "lotes", "destino", "TEXT NOT NULL DEFAULT ''");
+  asegurarColumna(db, "movimientos", "destino", "TEXT NOT NULL DEFAULT ''");
+  asegurarColumna(db, "movimientos", "linea", "TEXT NOT NULL DEFAULT ''");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS recetas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      destino TEXT NOT NULL,
+      linea TEXT NOT NULL DEFAULT '1',
+      objetivo_kg REAL NOT NULL,
+      tolerancia_kg REAL NOT NULL,
+      creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS receta_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      receta_id INTEGER NOT NULL,
+      tipo TEXT NOT NULL,
+      kg REAL NOT NULL CHECK (kg > 0),
+      UNIQUE (receta_id, tipo)
+    );
+
+    CREATE TABLE IF NOT EXISTS pesajes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      numero INTEGER NOT NULL,
+      fecha TEXT NOT NULL,
+      destino TEXT NOT NULL,
+      linea TEXT NOT NULL,
+      receta_id INTEGER NOT NULL,
+      creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      UNIQUE (fecha, destino, linea, numero)
+    );
+
+    CREATE TABLE IF NOT EXISTS minilotes (
+      token TEXT PRIMARY KEY,
+      tag TEXT NOT NULL,
+      pesaje_id INTEGER NOT NULL,
+      tipo TEXT NOT NULL,
+      kg REAL NOT NULL CHECK (kg > 0),
+      destino TEXT NOT NULL,
+      linea TEXT NOT NULL,
+      creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_mini_pesaje ON minilotes (pesaje_id, tipo, creado_en);
+
+    CREATE TABLE IF NOT EXISTS usuarios (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre TEXT NOT NULL,
+      usuario TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      clave TEXT NOT NULL,
+      rango TEXT NOT NULL CHECK (rango IN ('administrador', 'consulta')),
+      activo INTEGER NOT NULL DEFAULT 1,
+      creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+  `);
+  asegurarColumna(db, "recetas", "linea", "TEXT NOT NULL DEFAULT '1'");
+  db.prepare("UPDATE lotes SET estado = 'RECIBIDO' WHERE estado = 'PENDIENTE POR TRANSFERIR'").run();
+  db.prepare("UPDATE movimientos SET estado = 'RECIBIDO' WHERE estado = 'PENDIENTE POR TRANSFERIR'").run();
+}
+
+function asegurarColumna(db: SqliteDb, tabla: "lotes" | "movimientos" | "recetas", columna: string, definicion: string) {
+  const columnas = db.prepare(`PRAGMA table_info(${tabla})`).all() as { name: string }[];
+  if (!columnas.some((fila) => fila.name === columna)) {
+    db.exec(`ALTER TABLE ${tabla} ADD COLUMN ${columna} ${definicion}`);
+  }
 }
 
 export function getDb() {
   if (!globalForDb.sqlite) {
     globalForDb.sqlite = abrirBase(rutaBaseDatos());
+  } else {
+    asegurarEsquema(globalForDb.sqlite);
+    asegurarCatalogo(globalForDb.sqlite);
   }
   return globalForDb.sqlite;
 }
