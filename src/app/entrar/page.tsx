@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { FormularioEntrada } from "@/components/formulario-entrada";
 import { LogoPurolomo } from "@/components/logo";
 import { getDb } from "@/lib/db";
-import { contarUsuarios, leerSesion } from "@/lib/usuarios";
+import { contarUsuarios, leerSesion, sesionSigueActiva } from "@/lib/usuarios";
 
 export default function Page({
   searchParams,
@@ -30,9 +30,11 @@ async function Entrada({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await connection();
-  if (await leerSesion()) redirect("/");
+  const db = getDb();
+  const sesion = await leerSesion();
+  if (sesion && sesionSigueActiva(db, sesion)) redirect("/");
   const siguiente = texto((await searchParams).siguiente);
-  const primero = contarUsuarios(getDb()) === 0;
+  const primero = contarUsuarios(db) === 0;
 
   return (
     <main className="grid min-h-dvh place-items-center bg-white px-4 py-10">
