@@ -7,7 +7,8 @@ import { abrirBase } from "./db.ts";
 import { buscarLote, insertarRecepcion } from "./lotes.ts";
 import { abrirPesaje, buscarMiniLote, buscarPesajePorCodigo, codigoDePesaje, codigoDelPesaje, consumirEnPesaje, existenciasDeTipos, planillaDeProducto, retirosDeTag, tagsDelTipo } from "./pesajes.ts";
 import { leerConsumoQr, textoQr, textoQrMiniLote } from "./qr.ts";
-import { guardarReceta, interpretarFilasReceta } from "./recetas.ts";
+import { excelDeReceta } from "./excel-receta.ts";
+import { guardarReceta, interpretarFilasReceta, leerRecetaExcel } from "./recetas.ts";
 
 function baseTemporal() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "purolomo-pesaje-"));
@@ -55,6 +56,29 @@ test("acepta una receta de Alibal 1 kg entre 725 y 755 kg", () => {
     "2",
   );
   assert.equal(linea2Corta.ok, false);
+});
+
+test("el excel descargado de la receta se puede volver a cargar", () => {
+  const receta = interpretarFilasReceta([
+    ["Tipo", "Kg"],
+    ["GL", "340"],
+    ["CH", "240"],
+    ["CHEXT", "150"],
+  ]);
+  assert.equal(receta.ok, true);
+  if (!receta.ok) return;
+  const archivo = excelDeReceta({
+    id: 1,
+    destino: "ALIBAL 1 K",
+    linea: "1",
+    objetivoKg: 730,
+    toleranciaKg: 15,
+    items: receta.value,
+  });
+  const leida = leerRecetaExcel(archivo, "1");
+  assert.equal(leida.ok, true);
+  if (!leida.ok) return;
+  assert.deepEqual(leida.value, receta.value);
 });
 
 test("un pesaje junta dos tags del mismo MPC y rechaza lo que no está en la receta", () => {

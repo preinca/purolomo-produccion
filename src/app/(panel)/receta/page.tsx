@@ -57,6 +57,13 @@ async function Receta() {
                     </li>
                   ))}
                 </ul>
+                <a
+                  href={`/receta/excel/${receta.linea}`}
+                  download={`receta-alibal-linea-${receta.linea}.xlsx`}
+                  className="w-fit font-medium underline"
+                >
+                  Descargar Excel
+                </a>
               </section>
             ))
           )}
