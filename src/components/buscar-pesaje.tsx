@@ -15,6 +15,7 @@ export type FichaPesaje = {
   linea: string;
   total: number;
   codigo: string;
+  observaciones: string;
   lineas: { tipo: string; usado: number; objetivo: number }[];
   minis: { token: string; tipo: string; kg: number; tag: string; destino: string; disponibles: number | null }[];
 };
@@ -29,6 +30,7 @@ export function BuscarPesaje({ inicial, fichas }: { inicial: string; fichas: Fic
         ? fichas.filter((ficha) =>
             coincideBusqueda(consulta, [
               ficha.codigo,
+              ficha.observaciones,
               String(ficha.numero),
               ficha.fecha,
               ficha.destino,
@@ -43,7 +45,7 @@ export function BuscarPesaje({ inicial, fichas }: { inicial: string; fichas: Fic
     (coincidencias.length === 1 ? coincidencias[0] : null);
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
       <CampoFiltro
         etiqueta="Código del pesaje"
         placeholder="Escribe la sigla, el mini lote o el total"
@@ -87,6 +89,11 @@ function Detalle({ ficha }: { ficha: FichaPesaje }) {
       </CardHeader>
       <CardContent className="grid gap-4">
         <p className="rounded-lg bg-muted px-3 py-2 font-mono text-sm break-all">{ficha.codigo}</p>
+        {ficha.observaciones.trim() ? (
+          <p className="rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-950">
+            Observación: {ficha.observaciones.trim()}
+          </p>
+        ) : null}
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Dato etiqueta="Fecha" valor={formatoFecha(ficha.fecha)} />
           <Dato etiqueta="Producto" valor={ficha.destino} />

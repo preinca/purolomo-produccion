@@ -39,7 +39,7 @@ async function Lista({
   const usuarios = listarUsuarios(getDb());
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-8">
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <Card>
         <CardHeader>

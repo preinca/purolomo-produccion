@@ -90,7 +90,7 @@ export function MovimientoForm({
               name="destino"
               required
               defaultValue=""
-              className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="h-11 w-full rounded-lg border border-input bg-white px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <option value="">Elige un producto…</option>
               {DESTINOS.map((destino) => (
@@ -111,7 +111,7 @@ export function MovimientoForm({
               required
               value={linea}
               onChange={(event) => setLinea(event.target.value)}
-              className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="h-11 w-full rounded-lg border border-input bg-white px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <option value="">Elige una línea…</option>
               {LINEAS.map((item) => (

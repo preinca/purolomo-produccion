@@ -91,10 +91,25 @@ export function LectorQr() {
             <Dato etiqueta="Kg recibidos" valor={formatoKg(lote.kgRecibidos)} />
             <Dato etiqueta="Kg consumidos" valor={formatoKg(kgConsumidosDe(lote))} />
             <Dato etiqueta="Kg disponibles" valor={formatoKg(kgDisponiblesDe(lote))} />
-            {tagAgotado(lote) ? (
+            {lote.observaciones.trim() ? (
+              <div className="col-span-2">
+                <dt className="text-[11px] tracking-wide text-muted-foreground uppercase">Observación</dt>
+                <dd className="mt-1 rounded-md bg-amber-100 px-2 py-1.5 font-medium text-amber-950">
+                  {lote.observaciones.trim()}
+                </dd>
+              </div>
+            ) : null}
+            {lote.estado === "LOGISTICA" ? (
               <div className="col-span-2">
                 <dt className="text-[11px] tracking-wide text-muted-foreground uppercase">Aviso</dt>
-                <dd className="mt-1 font-medium">
+                <dd className="mt-1 rounded-md bg-orange-500 px-2 py-1.5 font-medium text-white">
+                  Este TAG fue trasladado a logística y ya no se puede consumir.
+                </dd>
+              </div>
+            ) : tagAgotado(lote) ? (
+              <div className="col-span-2">
+                <dt className="text-[11px] tracking-wide text-muted-foreground uppercase">Aviso</dt>
+                <dd className="mt-1 rounded-md bg-red-600 px-2 py-1.5 font-medium text-white">
                   Se acabaron todos los kg de esta materia prima. El QR se conserva para la trazabilidad.
                 </dd>
               </div>

@@ -49,7 +49,7 @@ async function Eliminar({
   }));
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-8">
       {eliminado ? (
         <p role="status" className="max-w-xl rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
           El lote {eliminado} quedó eliminado.

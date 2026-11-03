@@ -20,7 +20,7 @@ export function CampoFiltro({
         value={valor}
         placeholder={placeholder}
         onChange={(evento) => alCambiar(evento.target.value)}
-        className={`h-8 rounded-lg border border-input bg-card px-2.5 text-sm font-normal ${mono ? "font-mono" : ""}`}
+        className={`h-11 rounded-lg border border-input bg-white px-3 text-base font-normal ${mono ? "font-mono" : ""}`}
       />
     </label>
   );

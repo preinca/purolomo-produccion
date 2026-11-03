@@ -5,7 +5,7 @@ import { PageFrame } from "@/components/page-frame";
 import { TablaLotes } from "@/components/tabla-lotes";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDb } from "@/lib/db";
-import { fechaHoy } from "@/lib/formato";
+import { fechaHoy, semanaDe } from "@/lib/formato";
 import { listarLotes, siguienteTag } from "@/lib/lotes";
 import { PRODUCTOS_MPC } from "@/lib/mpc";
 
@@ -28,24 +28,32 @@ async function Entradas() {
   const recientes = listarLotes(db, { limite: 12 });
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[26rem_1fr]">
+    <div className="grid gap-8">
       <Card>
         <CardHeader>
           <CardTitle>Nueva recepción</CardTitle>
           <CardDescription>
             El TAG se sugiere solo. Puedes cambiarlo si la paleta ya trae número.
-            La semana se calcula de la fecha.
+            La semana se puede escribir; hoy corresponde a la {semanaDe(fechaHoy()).toLowerCase()}.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <EntradaForm hoy={fechaHoy()} tagSugerido={siguienteTag(db)} productos={PRODUCTOS_MPC} />
+          <EntradaForm
+            hoy={fechaHoy()}
+            semanaSugerida={semanaDe(fechaHoy()).replace(/\D/g, "") || "45"}
+            tagSugerido={siguienteTag(db)}
+            productos={PRODUCTOS_MPC}
+          />
         </CardContent>
       </Card>
-      <Card>
+      <Card className="min-w-0">
         <CardHeader>
           <CardTitle>Últimas paletas</CardTitle>
+          <CardDescription>
+            Las recepciones más recientes, con su TAG, producto, kilos y estado.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0">
           <TablaLotes lotes={recientes} vacio="Todavía no hay recepciones." />
         </CardContent>
       </Card>

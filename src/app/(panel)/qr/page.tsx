@@ -4,31 +4,89 @@ import { BotonImprimir } from "@/components/boton-imprimir";
 import { LectorQr } from "@/components/lector-qr";
 import { PageFrame } from "@/components/page-frame";
 import { QrEnVivo } from "@/components/qr-en-vivo";
+import { QrPesaje } from "@/components/qr-pesaje";
 import { getDb } from "@/lib/db";
 import { listarLotes } from "@/lib/lotes";
-import { retirosDeTag } from "@/lib/pesajes";
+import { fichaQrPesaje, listarPesajesTodos, retirosDeTag } from "@/lib/pesajes";
 
-export default function Page() {
+export default function Page({ searchParams }: PageProps<"/qr">) {
   return (
     <PageFrame
-      titulo="Generar QR / Etiquetas"
-      descripcion="Cada etiqueta lleva el TAG, los kilos recibidos, los consumidos y los disponibles. Si se acaba la materia prima, el QR se conserva."
+      titulo="Consultar Qrs"
+      descripcion="Elige si quieres ver los QR de la materia prima que está en cava o los QR de cada pesaje."
       acciones={<BotonImprimir />}
     >
-      <LectorQr />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Armando etiquetas…</p>}>
-        <Etiquetas />
+        <Contenido searchParams={searchParams} />
       </Suspense>
     </PageFrame>
   );
 }
 
-async function Etiquetas() {
+async function Contenido({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await connection();
+  const parametros = await searchParams;
+  const vista = leer(parametros.vista) === "pesajes" ? "pesajes" : "cava";
   const db = getDb();
-  const etiquetas = listarLotes(db, { limite: 300 }).map((lote) => ({
-    lote,
-    retiros: retirosDeTag(db, lote.tag),
-  }));
-  return <QrEnVivo etiquetas={etiquetas} />;
+
+  return (
+    <div className="grid gap-8">
+      <div className="flex flex-wrap gap-3 print:hidden">
+        <a
+          href="/qr"
+          className={`rounded-lg border px-4 py-2 text-sm font-medium ${vista === "cava" ? "border-purolomo-red bg-purolomo-red text-white" : "border-border bg-white text-foreground"}`}
+        >
+          Materia prima en cava
+        </a>
+        <a
+          href="/qr?vista=pesajes"
+          className={`rounded-lg border px-4 py-2 text-sm font-medium ${vista === "pesajes" ? "border-purolomo-red bg-purolomo-red text-white" : "border-border bg-white text-foreground"}`}
+        >
+          Pesajes
+        </a>
+      </div>
+      {vista === "pesajes" ? <Pesajes /> : <Cava />}
+    </div>
+  );
+
+  function Cava() {
+    const etiquetas = listarLotes(db, { limite: 300 }).map((lote) => ({
+      lote,
+      retiros: retirosDeTag(db, lote.tag),
+    }));
+    return (
+      <>
+        <LectorQr />
+        <QrEnVivo etiquetas={etiquetas} />
+      </>
+    );
+  }
+
+  function Pesajes() {
+    const fichas = listarPesajesTodos(db)
+      .map((pesaje) => fichaQrPesaje(db, pesaje.id))
+      .filter((ficha) => ficha !== null);
+    if (fichas.length === 0) {
+      return (
+        <p className="rounded-xl bg-[#f4f6f8] px-4 py-8 text-center text-base text-muted-foreground">
+          Todavía no hay pesajes con retiros para generar su QR.
+        </p>
+      );
+    }
+    return (
+      <div className="grid gap-4 md:grid-cols-2">
+        {fichas.map((ficha) => (
+          <QrPesaje key={ficha.id} ficha={ficha} />
+        ))}
+      </div>
+    );
+  }
+}
+
+function leer(valor: string | string[] | undefined) {
+  return Array.isArray(valor) ? valor[0] ?? "" : valor ?? "";
 }

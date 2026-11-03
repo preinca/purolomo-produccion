@@ -45,6 +45,7 @@ async function Consulta({
       linea: pesaje.linea,
       total: progreso.total,
       codigo: codigoDelPesaje(db, pesaje.id),
+      observaciones: pesaje.observaciones,
       lineas: progreso.lineas.map((linea) => ({
         tipo: linea.tipo,
         usado: linea.usado,

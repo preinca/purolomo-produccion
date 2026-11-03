@@ -60,9 +60,12 @@ export function textoQr(lote: Lote, retiros: RetiroEnQr[] = []) {
     `Estado:${p.estado}`,
     `Uso:${p.destino}`,
   ];
-  if (tagAgotado(lote)) {
+  if (lote.estado === "LOGISTICA") {
+    lineas.push("Aviso:Trasladado a logística. Este TAG ya no se puede consumir.");
+  } else if (tagAgotado(lote)) {
     lineas.push("Aviso:Se acabaron todos los kg de esta materia prima");
   }
+  if (lote.observaciones.trim()) lineas.push(`Observacion:${lote.observaciones.trim()}`);
   for (const retiro of retiros) {
     lineas.push(
       `Mini:${retiro.token} ${retiro.kg} kg ${retiro.tipo} pesaje ${retiro.pesaje} linea ${retiro.linea} para ${retiro.destino}`,
@@ -123,6 +126,34 @@ export function leerConsumoQr(texto: string) {
   const token = texto.match(/TOKEN:\s*(ML\d{6})/i)?.[1]?.toUpperCase();
   if (!token) return null;
   return { token };
+}
+
+export function textoQrPesaje(datos: {
+  id: number;
+  numero: number;
+  fecha: string;
+  linea: string;
+  destino: string;
+  codigo: string;
+  total: number;
+  observaciones?: string;
+  retiros: { tipo: string; kg: number; token: string; tag: string }[];
+}) {
+  const lineas = [
+    "PUROLOMO PESAJE",
+    `ID:${datos.id}`,
+    `Numero:${datos.numero}`,
+    `Fecha:${datos.fecha}`,
+    `Linea:${datos.linea}`,
+    `Uso:${datos.destino}`,
+    `Codigo:${datos.codigo || "—"}`,
+    `Total:${datos.total}`,
+  ];
+  if (datos.observaciones?.trim()) lineas.push(`Observacion:${datos.observaciones.trim()}`);
+  for (const retiro of datos.retiros) {
+    lineas.push(`Retiro:${retiro.tipo} ${retiro.kg} kg ${retiro.token} paleta ${retiro.tag}`);
+  }
+  return lineas.join("\n");
 }
 
 export function svgDeTexto(texto: string, pixelSize = 3) {

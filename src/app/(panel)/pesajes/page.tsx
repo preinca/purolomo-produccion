@@ -1,5 +1,7 @@
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { guardarObservacionPesajeFormulario } from "@/app/actions";
+import { FormObservacion } from "@/components/form-observacion";
 import { PageFrame } from "@/components/page-frame";
 import { Card, CardContent } from "@/components/ui/card";
 import { getDb } from "@/lib/db";
@@ -36,13 +38,17 @@ async function Planilla({
   const planilla = planillaDeProducto(getDb(), producto);
 
   return (
-    <div className="grid gap-4">
-      <div className="flex flex-wrap gap-2">
+    <div className="grid gap-6">
+      <div className="flex flex-wrap gap-3">
         {DESTINOS.map((destino) => (
           <a
             key={destino}
             href={`/pesajes?producto=${encodeURIComponent(destino)}`}
-            className={`rounded-lg border px-2.5 py-1 text-sm ${destino === producto ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+            className={`rounded-lg border px-4 py-2 text-sm font-medium ${
+              destino === producto
+                ? "border-purolomo-red bg-purolomo-red text-white"
+                : "border-border bg-white text-foreground hover:bg-muted"
+            }`}
           >
             {destino}
           </a>
@@ -61,6 +67,8 @@ async function Planilla({
                   <th className="px-3 py-3 font-medium">Pesaje</th>
                   <th className="px-3 py-3 font-medium">Fecha</th>
                   <th className="px-3 py-3 font-medium">Línea</th>
+                  <th className="px-3 py-3 font-medium">Uso</th>
+                  <th className="px-3 py-3 font-medium">Observación</th>
                   {planilla.tipos.map((tipo) => (
                     <th key={tipo} className="px-3 py-3 font-medium">
                       {tipo}
@@ -80,6 +88,24 @@ async function Planilla({
                     </td>
                     <td className="px-3 py-3">{formatoFecha(fila.fecha)}</td>
                     <td className="px-3 py-3">{fila.linea}</td>
+                    <td className="px-3 py-3">{fila.destino}</td>
+                    <td className="px-3 py-3">
+                      <div className="grid w-64 gap-2">
+                        {fila.observaciones.trim() ? (
+                          <p className="rounded-md bg-amber-100 px-2 py-1.5 text-xs font-medium text-amber-950">
+                            {fila.observaciones.trim()}
+                          </p>
+                        ) : null}
+                        <FormObservacion
+                          key={`${fila.id}-${fila.observaciones}`}
+                          accion={guardarObservacionPesajeFormulario}
+                          campoId="pesaje_id"
+                          id={String(fila.id)}
+                          valor={fila.observaciones}
+                          etiqueta={`Aviso del pesaje ${fila.numero}`}
+                        />
+                      </div>
+                    </td>
                     {fila.celdas.map((celda) => (
                       <td key={`${fila.id}-${celda.tipo}`} className="px-3 py-3">
                         {celda.aportes.length === 0 ? null : (

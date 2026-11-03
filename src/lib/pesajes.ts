@@ -12,6 +12,7 @@ export type Pesaje = {
   destino: string;
   linea: string;
   recetaId: number;
+  observaciones: string;
 };
 
 export type MiniLote = {
@@ -33,18 +34,33 @@ function filaPesaje(row: Record<string, unknown>): Pesaje {
     destino: String(row.destino),
     linea: String(row.linea),
     recetaId: Number(row.receta_id),
+    observaciones: String(row.observaciones ?? ""),
   };
+}
+
+export function pesajeTerminado(db: SqliteDb, pesaje: Pesaje) {
+  const progreso = progresoPesaje(db, pesaje);
+  return progreso.total + 0.001 >= progreso.objetivo - progreso.tolerancia;
+}
+
+export function pesajeEnCurso(db: SqliteDb, destino = ALIBAL_1K.destino) {
+  const pesajes = listarPesajes(db, destino, 200);
+  return pesajes.find((pesaje) => !pesajeTerminado(db, pesaje)) ?? null;
+}
+
+export function siguienteNumero(db: SqliteDb, _fecha?: string, destino = ALIBAL_1K.destino) {
+  const fila = db
+    .prepare("SELECT COALESCE(MAX(numero), 0) AS numero FROM pesajes WHERE destino = ?")
+    .get(destino) as { numero: number };
+  return Number(fila.numero) + 1;
 }
 
 export function abrirPesaje(
   db: SqliteDb,
-  input: { fecha: string; numero: number; linea: string; destino?: string },
+  input: { fecha: string; numero?: number; linea: string; destino?: string },
 ): Resultado<Pesaje> {
   const fecha = input.fecha.trim();
   if (!fechaValida(fecha)) return { ok: false, error: "Indica una fecha válida." };
-  if (!Number.isInteger(input.numero) || input.numero < 1 || input.numero > 99) {
-    return { ok: false, error: "El número de pesaje tiene que estar entre 1 y 99." };
-  }
   if (input.linea !== "1" && input.linea !== "2") {
     return { ok: false, error: "Elige la línea 1 o la línea 2." };
   }
@@ -53,17 +69,28 @@ export function abrirPesaje(
   if (!receta) {
     return { ok: false, error: `Carga primero la receta de ${destino} para la línea ${input.linea}.` };
   }
+  const enCurso = pesajeEnCurso(db, destino);
+  if (enCurso) {
+    return {
+      ok: false,
+      error: `Termina el pesaje ${enCurso.numero} antes de abrir otro.`,
+    };
+  }
+  const numero = input.numero ?? siguienteNumero(db, fecha, destino);
+  if (!Number.isInteger(numero) || numero < 1 || numero > 99) {
+    return { ok: false, error: "El número de pesaje tiene que estar entre 1 y 99." };
+  }
 
   const existente = db
     .prepare(
       "SELECT * FROM pesajes WHERE fecha = ? AND destino = ? AND linea = ? AND numero = ?",
     )
-    .get(fecha, destino, input.linea, input.numero) as Record<string, unknown> | undefined;
+    .get(fecha, destino, input.linea, numero) as Record<string, unknown> | undefined;
   if (existente) return { ok: true, value: filaPesaje(existente) };
 
   const insertado = db
     .prepare("INSERT INTO pesajes (numero, fecha, destino, linea, receta_id) VALUES (?, ?, ?, ?, ?)")
-    .run(input.numero, fecha, destino, input.linea, receta.id);
+    .run(numero, fecha, destino, input.linea, receta.id);
   const pesaje = db.prepare("SELECT * FROM pesajes WHERE id = ?").get(Number(insertado.lastInsertRowid)) as
     | Record<string, unknown>
     | undefined;
@@ -83,8 +110,17 @@ export function listarPesajes(db: SqliteDb, destino = ALIBAL_1K.destino, limite 
   return filas.map(filaPesaje);
 }
 
-/** Código del pesaje: sigla y mini lote de cada materia prima, y al final el peso total. */
-export function codigoDePesaje(partes: { tipo: string; token: string }[], totalKg: number) {
+function numeroDeMiniLote(token: string) {
+  const digitos = token.toUpperCase().replace(/^ML/, "").replace(/\D/g, "");
+  if (!digitos) return token.toUpperCase();
+  return digitos.slice(-2).padStart(2, "0");
+}
+
+/** Código corto del pesaje: número, línea y los dos últimos dígitos del mini lote de cada MPC. */
+export function codigoDePesaje(
+  pesaje: { numero: number; linea: string },
+  partes: { tipo: string; token: string }[],
+) {
   const vistos = new Set<string>();
   const tramos: string[] = [];
   for (const parte of partes) {
@@ -94,12 +130,10 @@ export function codigoDePesaje(partes: { tipo: string; token: string }[], totalK
     const clave = `${tipo}\0${token}`;
     if (vistos.has(clave)) continue;
     vistos.add(clave);
-    tramos.push(`${tipo}${token}`);
+    tramos.push(`${tipo}${numeroDeMiniLote(token)}`);
   }
   if (tramos.length === 0) return "";
-  const total = Math.round(totalKg * 1000) / 1000;
-  const texto = Number.isInteger(total) ? String(total) : String(total);
-  return `${tramos.join("-")}-${texto}`;
+  return `${pesaje.numero}L${pesaje.linea}-${tramos.join("-")}`;
 }
 
 export function codigoDelPesaje(db: SqliteDb, pesajeId: number) {
@@ -113,8 +147,8 @@ export function codigoDelPesaje(db: SqliteDb, pesajeId: number) {
     return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
   });
   return codigoDePesaje(
+    pesaje,
     ordenados.map((mini) => ({ tipo: mini.tipo, token: mini.token })),
-    sumar(db, pesajeId),
   );
 }
 
@@ -139,13 +173,16 @@ export function planillaDeProducto(db: SqliteDb, destino: string) {
     )
     .all(destino) as { tipo: string }[];
   const tipos = [...new Set([...deReceta.map((fila) => fila.tipo), ...usados.map((fila) => fila.tipo)])];
-  const filas = pesajes.map((fila) => {
+  const filas = pesajes.flatMap((fila) => {
     const pesaje = filaPesaje(fila);
-    return {
+    if (!pesajeTerminado(db, pesaje)) return [];
+    return [{
       id: pesaje.id,
       numero: pesaje.numero,
       fecha: pesaje.fecha,
       linea: pesaje.linea,
+      destino: pesaje.destino,
+      observaciones: pesaje.observaciones,
       total: sumar(db, pesaje.id),
       codigo: codigoDelPesaje(db, pesaje.id),
       celdas: tipos.map((tipo) => ({
@@ -153,7 +190,7 @@ export function planillaDeProducto(db: SqliteDb, destino: string) {
         kg: sumar(db, pesaje.id, tipo),
         aportes: aportesDelTipo(db, pesaje.id, tipo),
       })),
-    };
+    }];
   });
   return { tipos, filas };
 }
@@ -176,6 +213,22 @@ function sumar(db: SqliteDb, pesajeId: number, tipo?: string) {
   return Math.round(Number(fila.kg) * 1000) / 1000;
 }
 
+export function faltantesDeReceta(db: SqliteDb, items: ItemReceta[]) {
+  const existencias = existenciasDeTipos(
+    db,
+    items.map((item) => item.tipo),
+  );
+  const disponible = new Map<string, number>();
+  for (const item of existencias) {
+    disponible.set(item.tipo, Math.round(((disponible.get(item.tipo) ?? 0) + item.kg) * 1000) / 1000);
+  }
+  return items.flatMap((item) => {
+    const hay = disponible.get(item.tipo) ?? 0;
+    if (hay + 0.001 >= item.kg) return [];
+    return [{ tipo: item.tipo, pedido: item.kg, disponible: hay }];
+  });
+}
+
 export function existenciasDeTipos(db: SqliteDb, tipos: string[]) {
   const unicos = [...new Set(tipos.map((tipo) => tipo.trim()).filter(Boolean))];
   if (unicos.length === 0) return [];
@@ -187,6 +240,7 @@ export function existenciasDeTipos(db: SqliteDb, tipos: string[]) {
        FROM lotes l
        JOIN productos p ON p.codigo = l.codigo
        WHERE p.tipo IN (${marcas})
+         AND l.estado != 'LOGISTICA'
          AND l.kg_recibidos - l.kg_despachados - l.kg_consumidos > 0.001
        ORDER BY p.tipo, l.tag`,
     )
@@ -271,6 +325,40 @@ export function consumirEnPesaje(
   if (!resultado.ok) return resultado;
   if (!resultado.value.token) return { ok: false, error: "No se pudo crear el token del consumo." };
   return { ok: true, value: { token: resultado.value.token } };
+}
+
+export function guardarObservacionPesaje(db: SqliteDb, pesajeId: number, observacion: string): Resultado<Pesaje> {
+  const pesaje = buscarPesaje(db, pesajeId);
+  if (!pesaje) return { ok: false, error: "Ese pesaje no existe." };
+  const texto = observacion.trim();
+  if (texto.length > 500) return { ok: false, error: "La observación no puede pasar de 500 caracteres." };
+  db.prepare("UPDATE pesajes SET observaciones = ? WHERE id = ?").run(texto, pesaje.id);
+  const actualizado = buscarPesaje(db, pesaje.id);
+  if (!actualizado) return { ok: false, error: "No se pudo guardar la observación." };
+  return { ok: true, value: actualizado };
+}
+
+export function fichaQrPesaje(db: SqliteDb, pesajeId: number) {
+  const pesaje = buscarPesaje(db, pesajeId);
+  if (!pesaje) return null;
+  const retiros = listarMiniLotes(db, pesaje.id);
+  if (retiros.length === 0) return null;
+  return {
+    id: pesaje.id,
+    numero: pesaje.numero,
+    fecha: pesaje.fecha,
+    linea: pesaje.linea,
+    destino: pesaje.destino,
+    codigo: codigoDelPesaje(db, pesaje.id),
+    observaciones: pesaje.observaciones,
+    total: Math.round(retiros.reduce((suma, retiro) => suma + retiro.kg, 0) * 1000) / 1000,
+    retiros: retiros.map((retiro) => ({
+      tipo: retiro.tipo,
+      kg: retiro.kg,
+      token: retiro.token,
+      tag: retiro.tag,
+    })),
+  };
 }
 
 export function listarPesajesTodos(db: SqliteDb) {

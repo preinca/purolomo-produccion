@@ -130,11 +130,17 @@ function asegurarEsquema(db: SqliteDb) {
     );
   `);
   asegurarColumna(db, "recetas", "linea", "TEXT NOT NULL DEFAULT '1'");
+  asegurarColumna(db, "pesajes", "observaciones", "TEXT NOT NULL DEFAULT ''");
   db.prepare("UPDATE lotes SET estado = 'RECIBIDO' WHERE estado = 'PENDIENTE POR TRANSFERIR'").run();
   db.prepare("UPDATE movimientos SET estado = 'RECIBIDO' WHERE estado = 'PENDIENTE POR TRANSFERIR'").run();
 }
 
-function asegurarColumna(db: SqliteDb, tabla: "lotes" | "movimientos" | "recetas", columna: string, definicion: string) {
+function asegurarColumna(
+  db: SqliteDb,
+  tabla: "lotes" | "movimientos" | "recetas" | "pesajes",
+  columna: string,
+  definicion: string,
+) {
   const columnas = db.prepare(`PRAGMA table_info(${tabla})`).all() as { name: string }[];
   if (!columnas.some((fila) => fila.name === columna)) {
     db.exec(`ALTER TABLE ${tabla} ADD COLUMN ${columna} ${definicion}`);

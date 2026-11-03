@@ -21,7 +21,7 @@ export function StockEnVivo({ lotes }: { lotes: Lote[] }) {
   );
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
       <CampoFiltro
         etiqueta="Buscar"
         placeholder="TAG, producto o código"

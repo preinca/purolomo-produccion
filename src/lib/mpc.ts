@@ -38,6 +38,7 @@ export const ESTADOS_LOTE = [
   "RECIBIDO",
   "CONSUMIDOS",
   "DEVUELTO",
+  "LOGISTICA",
 ] as const;
 
 export type EstadoLote = (typeof ESTADOS_LOTE)[number];

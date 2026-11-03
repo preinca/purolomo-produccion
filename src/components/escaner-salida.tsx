@@ -138,7 +138,7 @@ export function EscanerSalida({ onLeido }: { onLeido: (lectura: LoteLeido) => vo
     <div className="grid gap-2 rounded-lg border border-dashed px-3 py-3">
       <p className="text-sm font-medium">Escanear el QR del TAG</p>
       <p className="text-xs text-muted-foreground">
-        Usa el mismo QR de la recepción. Al leerlo se completa el TAG para descontar los kilos de esta salida.
+        Usa el mismo QR de la recepción, o escribe el número de TAG en el campo de abajo. En los dos casos se carga la información del lote.
       </p>
       <div className="flex flex-wrap gap-2">
         <button

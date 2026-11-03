@@ -6,7 +6,6 @@ import { useEffect } from "react";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
-  BookOpen,
   ClipboardList,
   FileSpreadsheet,
   History,
@@ -17,6 +16,7 @@ import {
   FileSearch,
   Rows3,
   Search,
+  Truck,
   Trash2,
   Users,
   X,
@@ -33,23 +33,23 @@ const grupos = [
     titulo: "Principal",
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard, admin: false },
-      { href: "/stock", label: "Consultar stock", icon: PackageSearch, admin: false },
+      { href: "/stock", label: "Stock disponible", icon: PackageSearch, admin: false },
     ],
   },
   {
     titulo: "Operaciones",
     items: [
-      { href: "/inventario", label: "Inventario inicial", icon: ClipboardList, admin: true },
+      { href: "/inventario", label: "Catálogo CDM", icon: ClipboardList, admin: false },
       { href: "/entradas", label: "Registrar entradas", icon: ArrowDownToLine, admin: true },
       { href: "/receta", label: "Cargar receta", icon: FileSpreadsheet, admin: true },
       { href: "/salidas", label: "Registrar salidas", icon: ArrowUpFromLine, admin: false },
+      { href: "/logistica", label: "Registro de Logística", icon: Truck, admin: false },
       { href: "/pesajes", label: "Registro de pesajes", icon: Rows3, admin: false },
       { href: "/minilotes", label: "Buscar mini lote", icon: Search, admin: false },
       { href: "/consulta-pesaje", label: "Buscar pesaje", icon: FileSearch, admin: false },
-      { href: "/qr", label: "Generar QR / Etiquetas", icon: QrCode, admin: false },
+      { href: "/qr", label: "Consultar Qrs", icon: QrCode, admin: false },
       { href: "/eliminar", label: "Eliminar lote", icon: Trash2, admin: true },
       { href: "/usuarios", label: "Usuarios", icon: Users, admin: true },
-      { href: "/nomenclatura", label: "Leyenda MPC", icon: BookOpen, admin: false },
     ],
   },
   {
@@ -104,17 +104,17 @@ export function Shell({
       />
 
       <aside className="fixed inset-y-0 left-0 z-40 flex h-dvh w-[260px] shrink-0 -translate-x-full flex-col bg-navy text-white transition-transform peer-checked:translate-x-0 print:hidden lg:sticky lg:top-0 lg:bottom-auto lg:h-dvh lg:max-h-dvh lg:translate-x-0 lg:self-start">
-        <div className="flex items-center justify-between px-4 py-4">
+        <div className="relative flex items-center justify-center px-4 py-4">
           <LogoPurolomo />
           <label
             htmlFor="menu-lateral"
-            className="cursor-pointer rounded-md p-1 text-white/70 hover:bg-white/10 lg:hidden"
+            className="absolute right-3 cursor-pointer rounded-md p-1 text-white/70 hover:bg-white/10 lg:hidden"
             aria-label="Cerrar menú"
           >
             <X className="size-4" />
           </label>
         </div>
-        <nav className="flex-1 overflow-y-auto px-3 pb-6">
+        <nav className="menu-lateral flex-1 overflow-y-auto px-3 pb-6">
           {menu.map((grupo) => (
             <div key={grupo.titulo} className="mb-4">
               <p className="px-3 pb-1.5 text-[10px] font-semibold tracking-[0.16em] text-white/40 uppercase">
@@ -175,7 +175,7 @@ export function Shell({
             </form>
           </div>
         </header>
-        <div className="relative flex-1 bg-white">{children}</div>
+        <div className="relative min-h-0 flex-1 bg-[#f4f6f8]">{children}</div>
       </div>
     </div>
   );

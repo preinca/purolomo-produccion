@@ -20,7 +20,7 @@ export default function Page() {
   return (
     <PageFrame
       titulo="Historial de salidas"
-      descripcion="Despachos y consumos registrados por TAG."
+      descripcion="Consumos registrados por TAG."
     >
       <Suspense fallback={<p className="text-sm text-muted-foreground">Cargando historial…</p>}>
         <Historial />
@@ -41,7 +41,7 @@ async function Historial() {
       <CardContent className="pt-4">
         {filas.length === 0 ? (
           <p className="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-            Todavía no hay salidas ni consumos.
+            Todavía no hay salidas.
           </p>
         ) : (
           <Table>

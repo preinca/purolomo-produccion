@@ -28,7 +28,7 @@ export function FormularioUsuario() {
       </label>
       <label className="grid gap-1.5 text-sm font-medium">
         Rango
-        <select name="rango" defaultValue="consulta" className="h-8 rounded-lg border border-input bg-card px-2.5 text-sm font-normal">
+        <select name="rango" defaultValue="consulta" className="h-11 rounded-lg border border-input bg-white px-3 text-base font-normal">
           <option value="consulta">Consulta</option>
           <option value="administrador">Administrador</option>
         </select>

@@ -44,7 +44,7 @@ export function BuscarMiniLote({ inicial, fichas }: { inicial: string; fichas: F
     (coincidencias.length === 1 ? coincidencias[0] : null);
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
       <CampoFiltro
         etiqueta="Código del mini lote"
         placeholder="Escribe ML, el número o el TAG"
@@ -110,7 +110,9 @@ function Detalle({ ficha }: { ficha: FichaMini }) {
           <Dato etiqueta="Kg disponibles del TAG" valor={ficha.disponibles === null ? "—" : formatoKg(ficha.disponibles)} />
         </dl>
         {ficha.agotado ? (
-          <p className="text-sm text-muted-foreground">Se acabaron todos los kg de esta materia prima.</p>
+          <p className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white">
+            Se acabaron todos los kg de esta materia prima.
+          </p>
         ) : null}
       </CardContent>
     </Card>

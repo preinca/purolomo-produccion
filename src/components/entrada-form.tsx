@@ -10,10 +10,12 @@ import type { ProductoMpc } from "@/lib/mpc";
 
 export function EntradaForm({
   hoy,
+  semanaSugerida,
   tagSugerido,
   productos,
 }: {
   hoy: string;
+  semanaSugerida: string;
   tagSugerido: string;
   productos: ProductoMpc[];
 }) {
@@ -27,6 +29,7 @@ export function EntradaForm({
       <Campos
         key={estado?.ok ? estado.tag : "form"}
         hoy={hoy}
+        semanaSugerida={semanaSugerida}
         tagSugerido={tagSugerido}
         productos={productos}
         accion={accion}
@@ -39,7 +42,7 @@ export function EntradaForm({
       ) : null}
       {estado?.ok ? (
         <p role="status" className="text-sm">
-          Lote {estado.tag} guardado en SQLite. El QR ya está listo en Generar QR.
+          Lote {estado.tag} guardado en SQLite. El QR ya está listo en Consultar Qrs.
         </p>
       ) : null}
     </div>
@@ -48,12 +51,14 @@ export function EntradaForm({
 
 function Campos({
   hoy,
+  semanaSugerida,
   tagSugerido,
   productos,
   accion,
   pendiente,
 }: {
   hoy: string;
+  semanaSugerida: string;
   tagSugerido: string;
   productos: ProductoMpc[];
   accion: (payload: FormData) => void;
@@ -64,9 +69,22 @@ function Campos({
 
   return (
     <form action={accion} className="grid gap-4">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Campo label="Fecha" htmlFor="fecha">
           <Input id="fecha" name="fecha" type="date" required defaultValue={hoy} />
+        </Campo>
+        <Campo label="Semana" htmlFor="semana">
+          <Input
+            id="semana"
+            name="semana"
+            type="number"
+            inputMode="numeric"
+            required
+            min={1}
+            max={53}
+            step={1}
+            defaultValue={semanaSugerida}
+          />
         </Campo>
         <Campo label="TAG" htmlFor="tag">
           <Input
@@ -78,6 +96,18 @@ function Campos({
             placeholder="Número de paleta"
           />
         </Campo>
+        <Campo label="Kg recibidos" htmlFor="kg_recibidos">
+          <Input
+            id="kg_recibidos"
+            name="kg_recibidos"
+            type="number"
+            inputMode="decimal"
+            required
+            min="0.001"
+            step="0.001"
+            placeholder="0"
+          />
+        </Campo>
       </div>
 
       <Campo label="Tipo de materia prima" htmlFor="codigo">
@@ -87,7 +117,7 @@ function Campos({
           required
           value={codigo}
           onChange={(event) => setCodigo(event.target.value)}
-          className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="h-11 w-full rounded-lg border border-input bg-white px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <option value="">Elige un tipo…</option>
           {productos.map((producto) => (
@@ -105,18 +135,6 @@ function Campos({
         )}
       </Campo>
 
-      <Campo label="Kg recibidos" htmlFor="kg_recibidos">
-        <Input
-          id="kg_recibidos"
-          name="kg_recibidos"
-          type="number"
-          inputMode="decimal"
-          required
-          min="0.001"
-          step="0.001"
-          placeholder="0"
-        />
-      </Campo>
       <Campo label="Observaciones" htmlFor="observaciones">
         <Textarea
           id="observaciones"

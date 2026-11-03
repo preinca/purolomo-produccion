@@ -38,8 +38,17 @@ export function QrEtiqueta({ lote, retiros = [] }: { lote: Lote; retiros?: Retir
           <Dato etiqueta="Para" valor={lote.destino || "—"} />
         </dl>
       </div>
-      {tagAgotado(lote) ? (
-        <p className="mt-3 rounded-md bg-neutral-100 px-2 py-1.5 text-[11px] font-medium">
+      {lote.observaciones.trim() ? (
+        <p className="mt-3 rounded-md bg-amber-100 px-2 py-1.5 text-[11px] font-medium text-amber-950">
+          Observación: {lote.observaciones.trim()}
+        </p>
+      ) : null}
+      {lote.estado === "LOGISTICA" ? (
+        <p className="mt-3 rounded-md bg-orange-500 px-2 py-1.5 text-[11px] font-medium text-white">
+          Este TAG fue trasladado a logística y ya no se puede consumir.
+        </p>
+      ) : tagAgotado(lote) ? (
+        <p className="mt-3 rounded-md bg-red-600 px-2 py-1.5 text-[11px] font-medium text-white">
           Se acabaron todos los kg de esta materia prima. El QR se conserva para la trazabilidad.
         </p>
       ) : null}

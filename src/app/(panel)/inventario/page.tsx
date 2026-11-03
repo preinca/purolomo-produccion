@@ -13,12 +13,12 @@ import { PRODUCTOS_MPC } from "@/lib/mpc";
 export default function Page() {
   return (
     <PageFrame
-      titulo="Inventario inicial"
-      descripcion="Catálogo de materia prima cárnica (MPC) usado en recepción. Los códigos salen del CDM de octubre 2026."
+      titulo="Catálogo CDM"
+      descripcion="Leyenda MPC y códigos del CDM de octubre 2026. Es la misma nomenclatura de las planillas de planta."
     >
       <Card>
         <CardHeader>
-          <CardTitle>Ítems activos</CardTitle>
+          <CardTitle>Materia prima cárnica</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>

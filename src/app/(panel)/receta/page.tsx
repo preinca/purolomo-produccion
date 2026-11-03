@@ -8,25 +8,36 @@ import { getDb } from "@/lib/db";
 import { formatoKg } from "@/lib/formato";
 import { recetasCargadas } from "@/lib/recetas";
 
-export default function Page() {
+export default function Page({ searchParams }: PageProps<"/receta">) {
   return (
     <PageFrame
       titulo="Cargar receta"
       descripcion="Al empezar la jornada se carga la receta de Alibal 1 kg. Después, en Registrar salidas, solo se puede retirar lo que esa receta permite."
     >
       <Suspense fallback={<p className="text-sm text-muted-foreground">Cargando…</p>}>
-        <Receta />
+        <Receta searchParams={searchParams} />
       </Suspense>
     </PageFrame>
   );
 }
 
-async function Receta() {
+async function Receta({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await connection();
+  const parametros = await searchParams;
+  const alerta = leer(parametros.alerta);
   const recetas = recetasCargadas(getDb());
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-2">
+    <div className="grid items-start gap-8 xl:grid-cols-2">
+      {alerta ? (
+        <p role="alert" className="rounded-xl border border-destructive bg-destructive/10 px-4 py-3 text-sm text-destructive xl:col-span-2">
+          {alerta}
+        </p>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Nueva receta</CardTitle>
@@ -74,4 +85,8 @@ async function Receta() {
       </Card>
     </div>
   );
+}
+
+function leer(valor: string | string[] | undefined) {
+  return Array.isArray(valor) ? valor[0] ?? "" : valor ?? "";
 }

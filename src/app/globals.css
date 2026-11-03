@@ -97,6 +97,33 @@
   }
 }
 
+.menu-lateral {
+  color-scheme: dark;
+  scrollbar-color: #071422 #071422;
+  scrollbar-width: thin;
+}
+
+.menu-lateral::-webkit-scrollbar {
+  width: 10px;
+  background: #071422;
+}
+
+.menu-lateral::-webkit-scrollbar-track,
+.menu-lateral::-webkit-scrollbar-corner {
+  background: #071422;
+}
+
+.menu-lateral::-webkit-scrollbar-thumb {
+  background: #071422;
+  border: 2px solid #071422;
+}
+
+.menu-lateral::-webkit-scrollbar-button {
+  background: #071422;
+  height: 0;
+  width: 0;
+}
+
 @media print {
   body {
     background: white !important;

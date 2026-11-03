@@ -40,6 +40,7 @@ export type NuevoLote = {
   kgRecibidos: number;
   observaciones?: string;
   destino?: string;
+  semana?: string;
 };
 
 export type Resultado<T = void> =
@@ -104,12 +105,22 @@ export function validarRecepcion(input: {
   codigo: string;
   cantidad: string;
   destino?: string;
+  semana?: string;
 }): Resultado<NuevoLote> {
   const fecha = input.fecha.trim();
   const tag = input.tag.trim();
   const codigo = input.codigo.trim();
   const destino = (input.destino ?? "").trim();
   const kgRecibidos = Number(input.cantidad.trim().replace(",", "."));
+  const semanaEscrita = (input.semana ?? "").trim();
+  let semana: string | undefined;
+  if (semanaEscrita) {
+    const numero = Number(semanaEscrita.replace(/^semana\s*/i, ""));
+    if (!Number.isInteger(numero) || numero < 1 || numero > 53) {
+      return { ok: false, error: "La semana tiene que ser un número del 1 al 53." };
+    }
+    semana = `SEMANA ${numero}`;
+  }
 
   if (!fechaValida(fecha)) return { ok: false, error: "Indica una fecha válida." };
   if (!/^\d{4,8}$/.test(tag)) {
@@ -132,6 +143,7 @@ export function validarRecepcion(input: {
       codigo,
       destino,
       kgRecibidos: Math.round(kgRecibidos * 1000) / 1000,
+      semana,
     },
   };
 }
@@ -155,7 +167,7 @@ export function insertarRecepcion(db: SqliteDb, nuevo: NuevoLote): Resultado<Lot
     return { ok: false, error: "Elige el producto y la presentación donde se va a usar." };
   }
 
-  const semana = semanaDe(nuevo.fecha);
+  const semana = nuevo.semana || semanaDe(nuevo.fecha);
   const estado: EstadoLote = "RECIBIDO";
 
   db.exec("BEGIN");
@@ -273,6 +285,9 @@ export function registrarDespacho(
 ): Resultado<{ token: string | null }> {
   const lote = buscarLote(db, input.tag);
   if (!lote) return { ok: false, error: "No existe ese TAG." };
+  if (lote.estado === "LOGISTICA") {
+    return { ok: false, error: `El TAG ${lote.tag} fue trasladado a logística y ya no se puede consumir.` };
+  }
   if (input.kg <= 0) return { ok: false, error: "Los kilos consumidos tienen que ser mayores que 0." };
   const destino = input.destino.trim();
   if (!destinoValido(destino)) {
@@ -330,6 +345,60 @@ export function registrarDespacho(
     throw error;
   }
   return { ok: true, value: { token } };
+}
+
+export function guardarObservacionLote(db: SqliteDb, tag: string, observacion: string): Resultado<Lote> {
+  const lote = buscarLote(db, tag);
+  if (!lote) return { ok: false, error: "Ese TAG no existe." };
+  const texto = observacion.trim();
+  if (texto.length > 500) return { ok: false, error: "La observación no puede pasar de 500 caracteres." };
+  db.prepare("UPDATE lotes SET observaciones = ? WHERE tag = ?").run(texto, lote.tag);
+  const actualizado = buscarLote(db, lote.tag);
+  if (!actualizado) return { ok: false, error: "No se pudo guardar la observación." };
+  return { ok: true, value: actualizado };
+}
+
+export function trasladarALogistica(
+  db: SqliteDb,
+  input: { tag: string; fecha: string; observacion: string },
+): Resultado {
+  const lote = buscarLote(db, input.tag);
+  if (!lote) return { ok: false, error: "No existe ese TAG." };
+  if (lote.estado === "LOGISTICA") {
+    return { ok: false, error: `El TAG ${lote.tag} ya fue trasladado a logística.` };
+  }
+  const observacion = input.observacion.trim();
+  if (!observacion) return { ok: false, error: "Escribe la observación del traslado a logística." };
+  if (observacion.length > 500) return { ok: false, error: "La observación no puede pasar de 500 caracteres." };
+  const resto = kgRestantes(lote);
+  if (resto <= 0.001) return { ok: false, error: "Ese TAG ya no tiene kilos para trasladar." };
+  if (!fechaValida(input.fecha)) return { ok: false, error: "Indica una fecha válida." };
+  const semana = semanaDe(input.fecha) || lote.semana;
+  const previa = lote.observaciones.trim();
+  const observaciones = previa ? `${previa} · ${observacion}` : observacion;
+  const usos = lote.destino
+    .split(" · ")
+    .map((parte) => parte.trim())
+    .filter(Boolean);
+  if (!usos.includes("LOGISTICA")) usos.push("LOGISTICA");
+
+  db.exec("BEGIN");
+  try {
+    db.prepare("UPDATE lotes SET estado = 'LOGISTICA', observaciones = ?, destino = ? WHERE tag = ?").run(
+      observaciones,
+      usos.join(" · "),
+      lote.tag,
+    );
+    db.prepare(
+      `INSERT INTO movimientos (tag, tipo, fecha, semana, kg, estado, nota, destino)
+       VALUES (?, 'transferencia', ?, ?, ?, 'LOGISTICA', ?, 'LOGISTICA')`,
+    ).run(lote.tag, input.fecha, semana, resto, `Trasladado a logística. ${observacion}`);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return { ok: true, value: undefined };
 }
 
 export function registrarConsumo(

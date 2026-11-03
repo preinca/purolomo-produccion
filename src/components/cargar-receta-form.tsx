@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { LINEAS } from "@/lib/lineas";
 
 const selectClass =
-  "h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+  "h-11 w-full rounded-lg border border-input bg-white px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export function CargarRecetaForm() {
   const [estado, accion, pendiente] = useActionState<EstadoFormulario, FormData>(cargarRecetaAlibal, null);

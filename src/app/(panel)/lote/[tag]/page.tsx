@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { guardarObservacionTagFormulario } from "@/app/actions";
 import { BotonImprimir } from "@/components/boton-imprimir";
 import { EstadoBadge } from "@/components/estado-badge";
+import { FormObservacion } from "@/components/form-observacion";
 import { PageFrame } from "@/components/page-frame";
 import { QrEtiqueta } from "@/components/qr-etiqueta";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,7 +58,7 @@ async function Detalle({ params }: { params: Promise<{ tag: string }> }) {
         </>
       }
     >
-      <div className="grid items-start gap-6 lg:grid-cols-[22rem_1fr]">
+      <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
         <QrEtiqueta lote={lote} retiros={retiros} />
         <div className="grid gap-4">
           <section className="grid gap-3 sm:grid-cols-3">
@@ -69,10 +71,40 @@ async function Detalle({ params }: { params: Promise<{ tag: string }> }) {
               <CardTitle>Estado</CardTitle>
               <EstadoBadge estado={lote.estado} />
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              {formatoFecha(lote.fecha)} · {lote.semana} · disponibles {formatoKg(kgRestantes(lote))}
-              {lote.destino ? ` · para ${lote.destino}` : ""}
-              {tagAgotado(lote) ? ". Se acabaron todos los kg de esta materia prima." : ""}
+            <CardContent className="grid gap-3 text-sm text-muted-foreground">
+              <p>
+                {formatoFecha(lote.fecha)} · {lote.semana} · disponibles {formatoKg(kgRestantes(lote))}
+                {lote.destino ? ` · para ${lote.destino}` : ""}
+              </p>
+              {lote.estado === "LOGISTICA" ? (
+                <p className="rounded-lg bg-orange-500 px-3 py-2 font-medium text-white">
+                  Este TAG fue trasladado a logística y ya no se puede consumir.
+                </p>
+              ) : tagAgotado(lote) ? (
+                <p className="rounded-lg bg-red-600 px-3 py-2 font-medium text-white">
+                  Se acabaron todos los kg de esta materia prima.
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+          {lote.observaciones.trim() ? (
+            <p className="rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-950">
+              Observación: {lote.observaciones.trim()}
+            </p>
+          ) : null}
+          <Card>
+            <CardHeader>
+              <CardTitle>Observación del TAG</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FormObservacion
+                key={`${lote.tag}-${lote.observaciones}`}
+                accion={guardarObservacionTagFormulario}
+                campoId="tag"
+                id={lote.tag}
+                valor={lote.observaciones}
+                etiqueta="Aviso de esta materia prima"
+              />
             </CardContent>
           </Card>
           <Card>

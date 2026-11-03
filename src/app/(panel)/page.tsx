@@ -27,8 +27,8 @@ async function Dashboard() {
   const lotes = listarLotes(db, { limite: 12 });
 
   return (
-    <div className="grid gap-4">
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumen">
+    <div className="grid gap-8">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Resumen">
         <Kpi
           titulo="Total paletas"
           valor={formatoNumero(resumen.paletas)}
@@ -81,7 +81,7 @@ function Kpi({
     <Card size="sm" className={`border-l-4 ${color}`}>
       <CardContent>
         <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{titulo}</p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums">{valor}</p>
+        <p className="mt-2 text-3xl font-semibold tabular-nums">{valor}</p>
         <p className="text-xs text-muted-foreground">{detalle}</p>
       </CardContent>
     </Card>

@@ -41,6 +41,7 @@ export function TablaLotes({
           <TableHead className="text-right">Kg rec.</TableHead>
           <TableHead className="text-right">Kg consumidos</TableHead>
           <TableHead className="text-right">Kg disponibles</TableHead>
+          <TableHead>Observación</TableHead>
           {mostrarEstado ? <TableHead>Estado</TableHead> : null}
         </TableRow>
       </TableHeader>
@@ -69,6 +70,15 @@ export function TablaLotes({
               <TableCell className="text-right tabular-nums">{formatoKg(lote.kgRecibidos)}</TableCell>
               <TableCell className="text-right tabular-nums">{formatoKg(kgConsumidosDe(lote))}</TableCell>
               <TableCell className="text-right tabular-nums">{formatoKg(kgDisponiblesDe(lote))}</TableCell>
+              <TableCell className="max-w-64 whitespace-normal">
+                {lote.observaciones.trim() ? (
+                  <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-medium text-amber-950">
+                    {lote.observaciones.trim()}
+                  </span>
+                ) : (
+                  "—"
+                )}
+              </TableCell>
               {mostrarEstado ? (
                 <TableCell>
                   <EstadoBadge estado={lote.estado} />

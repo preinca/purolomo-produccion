@@ -30,7 +30,7 @@ export function QrEnVivo({
   }, [consulta, etiquetas]);
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
       <div className="print:hidden">
         <CampoFiltro
           etiqueta="TAG o producto"

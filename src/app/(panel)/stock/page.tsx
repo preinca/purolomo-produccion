@@ -8,7 +8,7 @@ import { listarLotes } from "@/lib/lotes";
 export default function Page() {
   return (
     <PageFrame
-      titulo="Consultar stock"
+      titulo="Stock disponible"
       descripcion="Escribe el TAG, el producto o el código. La lista se va filtrando mientras escribes."
     >
       <Suspense fallback={<p className="text-sm text-muted-foreground">Cargando stock…</p>}>
@@ -20,6 +20,6 @@ export default function Page() {
 
 async function Stock() {
   await connection();
-  const lotes = listarLotes(getDb(), { limite: 300 });
+  const lotes = listarLotes(getDb(), { limite: 300 }).filter((lote) => lote.estado !== "LOGISTICA");
   return <StockEnVivo lotes={lotes} />;
 }

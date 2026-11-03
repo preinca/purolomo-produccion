@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { abrirBase } from "./db.ts";
 import { buscarLote, insertarRecepcion } from "./lotes.ts";
-import { abrirPesaje, buscarMiniLote, buscarPesajePorCodigo, codigoDePesaje, codigoDelPesaje, consumirEnPesaje, existenciasDeTipos, planillaDeProducto, retirosDeTag, tagsDelTipo } from "./pesajes.ts";
+import { abrirPesaje, aportesDelTipo, buscarMiniLote, buscarPesajePorCodigo, codigoDePesaje, codigoDelPesaje, consumirEnPesaje, existenciasDeTipos, planillaDeProducto, retirosDeTag, tagsDelTipo } from "./pesajes.ts";
 import { leerConsumoQr, textoQr, textoQrMiniLote } from "./qr.ts";
 import { excelDeReceta } from "./excel-receta.ts";
 import { guardarReceta, interpretarFilasReceta, leerRecetaExcel } from "./recetas.ts";
@@ -127,29 +127,30 @@ test("un pesaje junta dos tags del mismo MPC y rechaza lo que no está en la rec
 
   const tags = tagsDelTipo(db, pesaje.value.id, "GL");
   assert.deepEqual(tags, ["5000001", "5000002"]);
-  const gl = planillaDeProducto(db, "ALIBAL 1 K").filas[0]?.celdas.find((celda) => celda.tipo === "GL");
+  assert.equal(planillaDeProducto(db, "ALIBAL 1 K").filas.length, 0);
+  const gl = aportesDelTipo(db, pesaje.value.id, "GL");
   assert.deepEqual(
-    gl?.aportes.map((aporte) => aporte.tag),
+    gl.map((aporte) => aporte.tag),
     ["5000001", "5000002"],
   );
-  assert.equal(gl?.aportes[0]?.token, primero.value.token);
-  assert.equal(gl?.aportes[0]?.kg, 200);
-  assert.equal(gl?.aportes[1]?.token, segundo.value.token);
-  assert.equal(gl?.aportes[1]?.kg, 140);
-  assert.equal(gl?.kg, 340);
+  assert.equal(gl[0]?.token, primero.value.token);
+  assert.equal(gl[0]?.kg, 200);
+  assert.equal(gl[1]?.token, segundo.value.token);
+  assert.equal(gl[1]?.kg, 140);
+  assert.equal(gl.reduce((suma, aporte) => suma + aporte.kg, 0), 340);
   assert.equal(
     codigoDePesaje(
+      { numero: 1, linea: "1" },
       [
         { tipo: "GL", token: "ML000001" },
         { tipo: "CH", token: "ML000002" },
-        { tipo: "CH", token: "ML000003" },
         { tipo: "CHEXT", token: "ML000004" },
       ],
-      730,
     ),
-    "GLML000001-CHML000002-CHML000003-CHEXTML000004-730",
+    "1L1-GL01-CH02-CHEXT04",
   );
-  const codigo = `GL${primero.value.token}-GL${segundo.value.token}-340`;
+  const corto = (token: string) => token.replace(/\D/g, "").slice(-2).padStart(2, "0");
+  const codigo = `2L1-GL${corto(primero.value.token)}-GL${corto(segundo.value.token)}`;
   assert.equal(codigoDelPesaje(db, pesaje.value.id), codigo);
   assert.equal(buscarPesajePorCodigo(db, codigo)?.id, pesaje.value.id);
   assert.equal(buscarPesajePorCodigo(db, "GLML999999-340"), null);
