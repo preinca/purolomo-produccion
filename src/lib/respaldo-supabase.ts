@@ -7,7 +7,11 @@ import os from "node:os";
 import path from "node:path";
 import type { SqliteDb } from "./db";
 
-const URL_SUPABASE = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
+// Acepta también la URL con /rest/v1 que muestra la página "Data API" de Supabase.
+const URL_SUPABASE = (process.env.SUPABASE_URL ?? "")
+  .trim()
+  .replace(/\/+$/, "")
+  .replace(/\/(rest|storage)\/v1$/, "");
 const CLAVE = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const BUCKET = process.env.SUPABASE_BUCKET || "demo-sqlite";
 const OBJETO = process.env.SUPABASE_OBJETO || "produccion.sqlite";

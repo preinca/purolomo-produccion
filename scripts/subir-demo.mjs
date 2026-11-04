@@ -5,7 +5,10 @@ import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 
-const url = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
+const url = (process.env.SUPABASE_URL ?? "")
+  .trim()
+  .replace(/\/+$/, "")
+  .replace(/\/(rest|storage)\/v1$/, "");
 const clave = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const bucket = process.env.SUPABASE_BUCKET || "demo-sqlite";
 const objeto = process.env.SUPABASE_OBJETO || "produccion.sqlite";
