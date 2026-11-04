@@ -43,12 +43,12 @@ export function pesajeTerminado(db: SqliteDb, pesaje: Pesaje) {
   return progreso.total + 0.001 >= progreso.objetivo - progreso.tolerancia;
 }
 
-export function pesajeEnCurso(db: SqliteDb, destino = ALIBAL_1K.destino) {
+export function pesajeEnCurso(db: SqliteDb, destino: string = ALIBAL_1K.destino) {
   const pesajes = listarPesajes(db, destino, 200);
   return pesajes.find((pesaje) => !pesajeTerminado(db, pesaje)) ?? null;
 }
 
-export function siguienteNumero(db: SqliteDb, _fecha?: string, destino = ALIBAL_1K.destino) {
+export function siguienteNumero(db: SqliteDb, _fecha?: string, destino: string = ALIBAL_1K.destino) {
   const fila = db
     .prepare("SELECT COALESCE(MAX(numero), 0) AS numero FROM pesajes WHERE destino = ?")
     .get(destino) as { numero: number };
@@ -103,7 +103,7 @@ export function buscarPesaje(db: SqliteDb, id: number) {
   return fila ? filaPesaje(fila) : null;
 }
 
-export function listarPesajes(db: SqliteDb, destino = ALIBAL_1K.destino, limite = 20) {
+export function listarPesajes(db: SqliteDb, destino: string = ALIBAL_1K.destino, limite = 20) {
   const filas = db
     .prepare("SELECT * FROM pesajes WHERE destino = ? ORDER BY fecha DESC, numero DESC LIMIT ?")
     .all(destino, limite) as Record<string, unknown>[];
