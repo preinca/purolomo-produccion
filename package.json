@@ -12,7 +12,8 @@
     "lint": "eslint",
     "test": "tsx --test src/lib/lotes.test.ts",
     "reset-db": "node scripts/reset-db.mjs",
-    "db:info": "node scripts/print-db-path.mjs"
+    "db:info": "node scripts/print-db-path.mjs",
+    "demo:subir": "node --env-file=.env.local scripts/subir-demo.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
