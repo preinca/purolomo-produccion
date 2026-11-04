@@ -1,9 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { puedeEntrar } from "@/lib/acceso";
-import { leerFirma } from "@/lib/firma";
+import { LOGIN_DESACTIVADO, leerFirma } from "@/lib/firma";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (LOGIN_DESACTIVADO) {
+    if (pathname !== "/entrar") return NextResponse.next();
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
   if (pathname === "/entrar") return NextResponse.next();
 
   const sesion = leerFirma(request.cookies.get("sesion")?.value);

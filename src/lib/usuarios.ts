@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import type { SqliteDb } from "./db";
 import type { Rango } from "./acceso";
 import { claveValida, hashClave } from "./claves";
-import { firmarSesion, leerFirma, type Sesion } from "./firma";
+import { LOGIN_DESACTIVADO, SESION_DEMO, firmarSesion, leerFirma, type Sesion } from "./firma";
 
 export type Usuario = {
   id: number;
@@ -94,11 +94,13 @@ export function alternarActivo(db: SqliteDb, id: number, quien: Sesion) {
 }
 
 export async function leerSesion() {
+  if (LOGIN_DESACTIVADO) return SESION_DEMO;
   const jar = await cookies();
   return leerFirma(jar.get("sesion")?.value);
 }
 
 export function sesionSigueActiva(db: SqliteDb, sesion: Sesion) {
+  if (LOGIN_DESACTIVADO && sesion.id === SESION_DEMO.id) return true;
   const fila = db.prepare("SELECT activo FROM usuarios WHERE id = ?").get(sesion.id) as { activo: number } | undefined;
   return !!fila && Number(fila.activo) === 1;
 }

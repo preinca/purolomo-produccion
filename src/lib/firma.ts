@@ -11,6 +11,18 @@ export type Sesion = {
   exp: number;
 };
 
+// TEMPORAL (fase de prueba): con `true` no se pide iniciar sesión y todos entran
+// como administrador de demostración. Para volver a pedir usuario y clave, ponlo en `false`.
+export const LOGIN_DESACTIVADO = true;
+
+export const SESION_DEMO: Sesion = {
+  id: 0,
+  usuario: "demo",
+  nombre: "Demostración",
+  rango: "administrador",
+  exp: Number.MAX_SAFE_INTEGER,
+};
+
 export function firmarSesion(datos: Sesion) {
   const cuerpo = Buffer.from(JSON.stringify(datos)).toString("base64url");
   const firma = createHmac("sha256", SECRETO).update(cuerpo).digest("base64url");
