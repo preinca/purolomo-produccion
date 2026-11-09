@@ -26,7 +26,7 @@ export function BuscadorGlobal({ sugerencias }: { sugerencias: Sugerencia[] }) {
       <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
       <input
         value={texto}
-        placeholder="Buscar TAG, mini lote o pesaje…"
+        placeholder="Buscar TAG o pesaje"
         className="h-9 w-full rounded-lg border border-input bg-background pr-3 pl-8 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         onChange={(evento) => {
           setTexto(evento.target.value);

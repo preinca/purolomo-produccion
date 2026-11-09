@@ -1,0 +1,204 @@
+PUROLOMO PRODUCCION
+Instalacion, red local y acceso desde fuera de la red
+Planta Cagua
+
+Este archivo explica como instalar la aplicacion en otra computadora
+con Windows, abrirla ahi, dejar que entren las personas de la misma
+red y, si hace falta, dejar que entren personas que no estan en esa red.
+
+
+1. Programas que hay que instalar
+
+Solo hace falta Node.js para usar la aplicacion en la misma red.
+Cloudflare Tunnel se instala aparte, solo si alguien va a entrar
+desde fuera de esa red.
+
+1. Entra a https://nodejs.org
+2. Descarga la version LTS de Node.js 22 o una superior.
+3. Ejecuta el instalador.
+4. Deja marcada la opcion "Add to PATH".
+5. Termina la instalacion.
+6. Cierra y vuelve a abrir cualquier ventana de PowerShell que ya estuviera abierta.
+
+Para comprobar que quedo instalado, abre PowerShell y escribe:
+
+node -v
+npm -v
+
+Tienen que aparecer dos numeros de version. Si PowerShell dice que no
+reconoce "node", cierra esa ventana, abre otra y vuelve a probar.
+
+
+2. Copiar el proyecto
+
+1. Copia el archivo purolomo-produccion.zip a la otra computadora.
+2. Descomprimelo en una carpeta simple, por ejemplo:
+
+C:\purolomo-produccion
+
+Evita dejarlo dentro de OneDrive. OneDrive a veces bloquea la base de
+datos mientras la aplicacion esta abierta.
+
+El zip no trae claves secretas. La aplicacion funciona sin crear un
+archivo .env.local. La base de datos ya viene en data\produccion.sqlite
+con la leyenda MPC y los usuarios que existian al armar el zip.
+No trae recepciones, salidas, recetas ni pesajes.
+
+
+3. Instalar las piezas de la aplicacion
+
+1. Abre PowerShell.
+2. Entra a la carpeta del proyecto. Si la dejaste en C:\purolomo-produccion:
+
+cd C:\purolomo-produccion
+
+3. Instala:
+
+npm install
+
+Espera a que termine. La primera vez puede tardar varios minutos.
+Si aparece un error de better-sqlite3, instala "Visual Studio Build Tools"
+con la carga "Desarrollo para el escritorio con C++" y vuelve a ejecutar
+npm install.
+
+
+4. Abrir la aplicacion en esa computadora
+
+En la misma carpeta, escribe:
+
+npm run dev
+
+Deja esa ventana abierta. Si la cierras, la aplicacion se apaga.
+
+En el navegador de esa misma computadora abre:
+
+http://localhost:47231
+
+Entra con un usuario que ya exista.
+
+
+5. Dejar que otras personas entren por la misma red
+
+Las otras personas tienen que estar en la misma red Wi-Fi o en el mismo
+cable de red que la computadora donde corre la aplicacion.
+
+5.1. Averiguar la direccion de esta computadora
+
+Abre otra ventana de PowerShell, sin cerrar la de npm run dev, y escribe:
+
+ipconfig
+
+Busca el adaptador de Wi-Fi, o el de Ethernet si esta conectada por cable.
+Anota el numero que dice "Direccion IPv4". Se parece a esto:
+
+192.168.8.100
+
+No uses 127.0.0.1. Esa direccion solo sirve en la misma computadora.
+Tampoco uses una direccion que empiece por 10.2, ni una de VirtualBox.
+
+5.2. Decirle a la aplicacion que acepte esa direccion
+
+1. Abre el archivo next.config.ts, que esta en la carpeta del proyecto.
+2. Busca la linea allowedDevOrigins.
+3. Cambia 192.168.8.100 por la IPv4 que anotaste. Deja el resto igual. Ejemplo:
+
+allowedDevOrigins: ["192.168.1.50", "*.trycloudflare.com", "*.ngrok-free.app", "*.ngrok-free.dev", "*.ngrok.app", "*.ngrok.io"],
+
+4. Guarda el archivo.
+5. En la ventana donde corre la aplicacion, presiona Ctrl+C.
+6. Vuelve a escribir:
+
+npm run dev
+
+5.3. Permitir el puerto en el firewall de Windows
+
+La primera vez, Windows puede preguntar si Node.js puede comunicarse
+en redes privadas. Marca "Redes privadas" y acepta.
+
+Si no pregunta y los otros equipos no abren la pagina, abre PowerShell
+como administrador y escribe esta linea completa:
+
+netsh advfirewall firewall add rule name="Purolomo 47231" dir=in action=allow protocol=TCP localport=47231 profile=private
+
+5.4. Entrar desde el otro equipo de la misma red
+
+En el telefono o en la otra computadora, conectado a la misma red, abre:
+
+http://192.168.1.50:47231
+
+Cambia 192.168.1.50 por la IPv4 de la computadora donde corre la
+aplicacion. El puerto es siempre 47231.
+
+Cada persona entra con su propio usuario.
+
+
+6. Entrar desde fuera de la red con Cloudflare Tunnel
+
+Sirve cuando la otra persona no esta en la misma red Wi-Fi.
+La aplicacion sigue corriendo en esta computadora. Cloudflare abre
+un enlace de internet que apunta a ella.
+
+6.1. Instalar Cloudflare
+
+Abre PowerShell y escribe:
+
+winget install --id Cloudflare.cloudflared -e
+
+Espera a que diga que la instalacion termino. Cierra esa ventana de
+PowerShell y abre una nueva. La ventana vieja no ve el programa nuevo.
+
+6.2. Abrir el enlace
+
+La ventana de npm run dev tiene que seguir abierta.
+
+En la ventana nueva de PowerShell escribe:
+
+cloudflared tunnel --url http://127.0.0.1:47231
+
+Espera unos segundos. Aparece una linea que empieza por https:// y
+termina en trycloudflare.com. Esa es la direccion. Compartela con
+quien tenga que entrar. Cada persona usa su usuario.
+
+6.3. Si PowerShell dice que no reconoce cloudflared
+
+El programa si quedo instalado. La ventana se abrio antes de que
+Windows actualizara la ruta, o no la tomo.
+
+Cierra esa ventana, abre una PowerShell nueva y vuelve a escribir:
+
+cloudflared tunnel --url http://127.0.0.1:47231
+
+Si en la ventana nueva vuelve a salir el mismo error, usa la ruta
+completa. Copia esta linea entera:
+
+& "C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel --url http://127.0.0.1:47231
+
+Si esa ruta tampoco existe, busca el programa con:
+
+Get-ChildItem "C:\Program Files","C:\Program Files (x86)" -Filter cloudflared.exe -Recurse
+
+Usa la ruta que aparezca, entre comillas, delante de tunnel.
+
+6.4. Mientras el enlace esta en uso
+
+- La computadora tiene que seguir encendida y despierta.
+- La ventana de npm run dev tiene que seguir abierta.
+- La ventana de cloudflared tiene que seguir abierta.
+- Si cierras cloudflared y lo vuelves a abrir, la direccion cambia.
+- Quien tenga el enlace llega a la pantalla de inicio de sesion.
+
+
+7. Mientras otras personas la estan usando
+
+- La computadora donde corre npm run dev tiene que seguir encendida.
+- Esa ventana de PowerShell tiene que seguir abierta.
+- Si la computadora se suspende, los demas dejan de entrar.
+- La direccion IPv4 puede cambiar si el router le da otra. Si un dia
+  deja de abrir por la red local, vuelve a mirar ipconfig y actualiza
+  next.config.ts.
+
+
+8. Para apagarla
+
+En la ventana de cloudflared, si la abriste, presiona Ctrl+C.
+En la ventana de PowerShell donde corre la aplicacion, presiona Ctrl+C.

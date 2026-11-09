@@ -30,6 +30,51 @@ export function TablaLotes({
   }
 
   return (
+    <>
+    <div className="grid gap-3 md:hidden">
+      {lotes.map((lote) => {
+        const tipo = productoPorCodigo(lote.codigo);
+        return (
+          <article key={lote.tag} className="grid gap-2 rounded-xl border bg-white p-4 text-sm">
+            <div className="flex items-start justify-between gap-3">
+              <Link href={`/lote/${lote.tag}`} className="font-mono text-lg font-semibold hover:underline">
+                {lote.tag}
+              </Link>
+              {mostrarEstado ? <EstadoBadge estado={lote.estado} /> : null}
+            </div>
+            <p className="font-medium">{lote.producto}</p>
+            <p className="text-xs text-muted-foreground">
+              {tipo ? `${tipo.tipo} · ${tipo.descripcion}` : lote.codigo}
+              {lote.destino ? ` · Para ${lote.destino}` : ""}
+            </p>
+            <p className="text-muted-foreground">
+              {formatoFecha(lote.fecha)} · {lote.semana}
+            </p>
+            <p className="font-mono text-xs">{lote.codigo}</p>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <p>
+                <span className="block text-muted-foreground">Recibidos</span>
+                <span className="font-semibold tabular-nums">{formatoKg(lote.kgRecibidos)}</span>
+              </p>
+              <p>
+                <span className="block text-muted-foreground">Consumidos</span>
+                <span className="font-semibold tabular-nums">{formatoKg(kgConsumidosDe(lote))}</span>
+              </p>
+              <p>
+                <span className="block text-muted-foreground">Disponibles</span>
+                <span className="font-semibold tabular-nums">{formatoKg(kgDisponiblesDe(lote))}</span>
+              </p>
+            </div>
+            {lote.observaciones.trim() ? (
+              <p className="rounded-md bg-amber-100 px-2 py-1 text-xs font-medium text-amber-950">
+                {lote.observaciones.trim()}
+              </p>
+            ) : null}
+          </article>
+        );
+      })}
+    </div>
+    <div className="hidden md:block">
     <Table>
       <TableHeader>
         <TableRow>
@@ -89,5 +134,7 @@ export function TablaLotes({
         })}
       </TableBody>
     </Table>
+    </div>
+    </>
   );
 }

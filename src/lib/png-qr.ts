@@ -1,6 +1,21 @@
 import { deflateSync } from "node:zlib";
 import { encode } from "uqr";
 
+/** Mapa en gris del QR: 0 es negro y 255 es blanco, sin el byte de filtro del PNG. */
+export function grisQr(texto: string, pixel = 4) {
+  const qr = encode(texto, { ecc: "M", border: 2 });
+  const lado = qr.size * pixel;
+  const gris = Buffer.alloc(lado * lado);
+  for (let y = 0; y < lado; y++) {
+    const fila = Math.floor(y / pixel);
+    for (let x = 0; x < lado; x++) {
+      const columna = Math.floor(x / pixel);
+      gris[y * lado + x] = qr.data[fila]?.[columna] ? 0 : 255;
+    }
+  }
+  return { lado, gris };
+}
+
 /** PNG en blanco y negro del texto que va dentro del QR. */
 export function pngQr(texto: string, pixel = 8) {
   const qr = encode(texto, { ecc: "M", border: 2 });

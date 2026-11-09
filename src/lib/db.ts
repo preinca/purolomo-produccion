@@ -124,20 +124,55 @@ function asegurarEsquema(db: SqliteDb) {
       nombre TEXT NOT NULL,
       usuario TEXT NOT NULL UNIQUE COLLATE NOCASE,
       clave TEXT NOT NULL,
-      rango TEXT NOT NULL CHECK (rango IN ('administrador', 'consulta')),
+      rango TEXT NOT NULL CHECK (rango IN ('administrador', 'consulta', 'recepcionista', 'pesador')),
       activo INTEGER NOT NULL DEFAULT 1,
       creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
   `);
   asegurarColumna(db, "recetas", "linea", "TEXT NOT NULL DEFAULT '1'");
+  asegurarColumna(db, "receta_items", "tolerancia_kg", "REAL NOT NULL DEFAULT 15");
+  asegurarColumna(db, "recetas", "minimo_kg", "REAL");
+  asegurarColumna(db, "recetas", "maximo_kg", "REAL");
+  asegurarColumna(db, "receta_items", "minimo_kg", "REAL");
+  asegurarColumna(db, "receta_items", "maximo_kg", "REAL");
   asegurarColumna(db, "pesajes", "observaciones", "TEXT NOT NULL DEFAULT ''");
+  asegurarColumna(db, "pesajes", "finalizado", "INTEGER NOT NULL DEFAULT 0");
+  asegurarColumna(db, "pesajes", "registrado_en", "TEXT NOT NULL DEFAULT ''");
+  ampliarRangos(db);
   db.prepare("UPDATE lotes SET estado = 'RECIBIDO' WHERE estado = 'PENDIENTE POR TRANSFERIR'").run();
   db.prepare("UPDATE movimientos SET estado = 'RECIBIDO' WHERE estado = 'PENDIENTE POR TRANSFERIR'").run();
 }
 
+function ampliarRangos(db: SqliteDb) {
+  const def = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'usuarios'").get() as
+    | { sql: string }
+    | undefined;
+  if (!def || def.sql.includes("recepcionista")) return;
+  db.pragma("foreign_keys = OFF");
+  const migrar = db.transaction(() => {
+    db.exec(`
+      CREATE TABLE usuarios_nueva (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL,
+        usuario TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        clave TEXT NOT NULL,
+        rango TEXT NOT NULL CHECK (rango IN ('administrador', 'consulta', 'recepcionista', 'pesador')),
+        activo INTEGER NOT NULL DEFAULT 1,
+        creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+      INSERT INTO usuarios_nueva (id, nombre, usuario, clave, rango, activo, creado_en)
+      SELECT id, nombre, usuario, clave, rango, activo, creado_en FROM usuarios;
+      DROP TABLE usuarios;
+      ALTER TABLE usuarios_nueva RENAME TO usuarios;
+    `);
+  });
+  migrar();
+  db.pragma("foreign_keys = ON");
+}
+
 function asegurarColumna(
   db: SqliteDb,
-  tabla: "lotes" | "movimientos" | "recetas" | "pesajes",
+  tabla: "lotes" | "movimientos" | "recetas" | "receta_items" | "pesajes",
   columna: string,
   definicion: string,
 ) {

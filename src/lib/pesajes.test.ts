@@ -5,7 +5,8 @@ import path from "node:path";
 import test from "node:test";
 import { abrirBase } from "./db.ts";
 import { buscarLote, insertarRecepcion } from "./lotes.ts";
-import { abrirPesaje, aportesDelTipo, buscarMiniLote, buscarPesajePorCodigo, codigoDePesaje, codigoDelPesaje, consumirEnPesaje, existenciasDeTipos, planillaDeProducto, retirosDeTag, tagsDelTipo } from "./pesajes.ts";
+import { sufijoDeMiniLote, tokenDeSecuencia } from "./minilote.ts";
+import { abrirPesaje, aportesDelTipo, buscarMiniLote, buscarPesajePorCodigo, codigoDePesaje, codigoDelPesaje, consumirEnPesaje, existenciasDeTipos, planillaDeProducto, quitarKgDePesaje, retirosDeTag, tagsDelTipo } from "./pesajes.ts";
 import { leerConsumoQr, textoQr, textoQrMiniLote } from "./qr.ts";
 import { excelDeReceta } from "./excel-receta.ts";
 import { guardarReceta, interpretarFilasReceta, leerRecetaExcel } from "./recetas.ts";
@@ -58,7 +59,7 @@ test("acepta una receta de Alibal 1 kg entre 725 y 755 kg", () => {
   assert.equal(linea2Corta.ok, false);
 });
 
-test("el excel descargado de la receta se puede volver a cargar", () => {
+test("el excel descargado de la receta se puede volver a cargar", async () => {
   const receta = interpretarFilasReceta([
     ["Tipo", "Kg"],
     ["GL", "340"],
@@ -67,13 +68,13 @@ test("el excel descargado de la receta se puede volver a cargar", () => {
   ]);
   assert.equal(receta.ok, true);
   if (!receta.ok) return;
-  const archivo = excelDeReceta({
+  const archivo = await excelDeReceta({
     id: 1,
     destino: "ALIBAL 1 K",
     linea: "1",
     objetivoKg: 730,
     toleranciaKg: 15,
-    items: receta.value,
+    items: receta.value.items,
   });
   const leida = leerRecetaExcel(archivo, "1");
   assert.equal(leida.ok, true);
@@ -149,7 +150,10 @@ test("un pesaje junta dos tags del mismo MPC y rechaza lo que no está en la rec
     ),
     "1L1-GL01-CH02-CHEXT04",
   );
-  const corto = (token: string) => token.replace(/\D/g, "").slice(-2).padStart(2, "0");
+  assert.equal(tokenDeSecuencia(100), "ML002S");
+  assert.equal(sufijoDeMiniLote("ML002S"), "2S");
+  assert.equal(codigoDePesaje({ numero: 1, linea: "1" }, [{ tipo: "GL", token: "ML002S" }]), "1L1-GL2S");
+  const corto = (token: string) => sufijoDeMiniLote(token);
   const codigo = `2L1-GL${corto(primero.value.token)}-GL${corto(segundo.value.token)}`;
   assert.equal(codigoDelPesaje(db, pesaje.value.id), codigo);
   assert.equal(buscarPesajePorCodigo(db, codigo)?.id, pesaje.value.id);
@@ -177,6 +181,12 @@ test("un pesaje junta dos tags del mismo MPC y rechaza lo que no está en la rec
 
   const deMas = consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000001", kg: 200 });
   assert.equal(deMas.ok, false);
+
+  const quitado = quitarKgDePesaje(db, { pesajeId: pesaje.value.id, token: primero.value.token });
+  assert.equal(quitado.ok, true);
+  assert.equal(buscarLote(db, "5000001")?.kgDespachados, 0);
+  assert.equal(aportesDelTipo(db, pesaje.value.id, "GL").some((aporte) => aporte.token === primero.value.token), false);
+  assert.equal(existenciasDeTipos(db, ["GL"]).find((item) => item.tag === "5000001")?.kg, 1000);
 
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });

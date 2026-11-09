@@ -123,7 +123,7 @@ export function textoQrMiniLote(datos: {
 }
 
 export function leerConsumoQr(texto: string) {
-  const token = texto.match(/TOKEN:\s*(ML\d{6})/i)?.[1]?.toUpperCase();
+  const token = texto.match(/TOKEN:\s*(ML(?:[0-9A-Z]{4}|\d{6}))/i)?.[1]?.toUpperCase();
   if (!token) return null;
   return { token };
 }

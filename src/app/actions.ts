@@ -20,10 +20,10 @@ import {
 import { destinoValido } from "@/lib/destinos";
 import { lineaPorId } from "@/lib/lineas";
 import { productoPorCodigo } from "@/lib/mpc";
-import { abrirPesaje, buscarMiniLote, consumirEnPesaje, faltantesDeReceta, guardarObservacionPesaje, retirosDeTag, siguienteNumero, tagsDelTipo } from "@/lib/pesajes";
+import { abrirPesaje, buscarMiniLote, buscarPesaje, consumirEnPesaje, faltantesDeReceta, finalizarPesaje, guardarObservacionPesaje, quitarKgDePesaje, retirosDeTag, siguienteNumero, tagsDelTipo } from "@/lib/pesajes";
 import { leerConsumoQr, leerTextoQr } from "@/lib/qr";
 import { guardarReceta, leerRecetaExcel } from "@/lib/recetas";
-import { exigirAdmin, exigirSesion, leerSesion } from "@/lib/usuarios";
+import { exigirAdmin, exigirRango, exigirSesion, leerSesion } from "@/lib/usuarios";
 
 export type EstadoFormulario = { error?: string; ok?: boolean; tag?: string } | null;
 
@@ -56,6 +56,12 @@ export type ConsumoLeido = {
   tags: string;
 };
 
+function rutaConsumo(pesajeId: number, extra = "") {
+  const destino = buscarPesaje(getDb(), pesajeId)?.destino ?? "ALIBAL 1 K";
+  const base = `/salidas?modo=consumo&producto=${encodeURIComponent(destino)}&pesaje=${pesajeId}`;
+  return extra ? `${base}&${extra}` : base;
+}
+
 function texto(formData: FormData, campo: string) {
   const valor = formData.get(campo);
   return typeof valor === "string" ? valor : "";
@@ -73,6 +79,7 @@ function refrescar() {
   revalidatePath("/receta");
   revalidatePath("/pesajes");
   revalidatePath("/qr");
+  revalidatePath("/etiquetas");
   revalidatePath("/eliminar");
   revalidatePath("/historial/entradas");
   revalidatePath("/historial/salidas");
@@ -157,7 +164,7 @@ export async function cargarRecetaAlibal(
   const leida = leerRecetaExcel(Buffer.from(await archivo.arrayBuffer()), linea);
   if (!leida.ok) return { error: leida.error };
   const db = getDb();
-  const faltantes = faltantesDeReceta(db, leida.value);
+  const faltantes = faltantesDeReceta(db, leida.value.items);
   if (faltantes.length > 0) {
     const detalle = faltantes
       .map((item) =>
@@ -186,7 +193,7 @@ export async function abrirPesajeFormulario(
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
-  await exigirSesion();
+  await exigirRango(["administrador", "pesador"]);
   const destino = texto(formData, "destino").trim();
   if (!destinoValido(destino)) return { error: "Elige el producto que se va a elaborar." };
   const resultado = abrirPesaje(getDb(), {
@@ -196,14 +203,14 @@ export async function abrirPesajeFormulario(
   });
   if (!resultado.ok) return { error: resultado.error };
   refrescar();
-  redirect(`/salidas?modo=consumo&pesaje=${resultado.value.id}`);
+  redirect(rutaConsumo(resultado.value.id));
 }
 
 export async function trasladarLogisticaFormulario(
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
-  await exigirSesion();
+  await exigirAdmin();
   const tag = texto(formData, "tag").trim();
   const resultado = trasladarALogistica(getDb(), {
     tag,
@@ -217,11 +224,23 @@ export async function trasladarLogisticaFormulario(
   redirect(`/salidas?modo=logistica&trasladado=${encodeURIComponent(tag)}`);
 }
 
+export async function finalizarPesajeFormulario(
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  await exigirRango(["administrador", "pesador"]);
+  const pesajeId = Number(texto(formData, "pesaje_id"));
+  const resultado = finalizarPesaje(getDb(), pesajeId);
+  if (!resultado.ok) return { error: resultado.error };
+  refrescar();
+  redirect(rutaConsumo(pesajeId, "cerrado=1"));
+}
+
 export async function consumirPesajeFormulario(
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
-  await exigirSesion();
+  await exigirRango(["administrador", "pesador"]);
   const pesajeId = Number(texto(formData, "pesaje_id"));
   const tag = texto(formData, "tag").trim();
   const resultado = consumirEnPesaje(getDb(), {
@@ -234,14 +253,28 @@ export async function consumirPesajeFormulario(
   refrescar();
   revalidatePath(`/lote/${tag}`);
   revalidatePath(`/qr/imagen/${tag}`);
-  redirect(`/salidas?modo=consumo&pesaje=${pesajeId}&token=${resultado.value.token}`);
+  redirect(rutaConsumo(pesajeId, `token=${resultado.value.token}`));
+}
+
+export async function quitarKgPesajeFormulario(
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  await exigirRango(["administrador", "pesador"]);
+  const pesajeId = Number(texto(formData, "pesaje_id"));
+  const resultado = quitarKgDePesaje(getDb(), { pesajeId, token: texto(formData, "token") });
+  if (!resultado.ok) return { error: resultado.error };
+  refrescar();
+  revalidatePath(`/lote/${resultado.value.tag}`);
+  revalidatePath(`/qr/imagen/${resultado.value.tag}`);
+  redirect(rutaConsumo(pesajeId));
 }
 
 export async function guardarObservacionTagFormulario(
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
-  await exigirSesion();
+  await exigirRango(["administrador", "recepcionista"]);
   const tag = texto(formData, "tag").trim();
   const resultado = guardarObservacionLote(getDb(), tag, texto(formData, "observacion"));
   if (!resultado.ok) return { error: resultado.error };
@@ -255,7 +288,7 @@ export async function guardarObservacionPesajeFormulario(
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
-  await exigirSesion();
+  await exigirRango(["administrador", "pesador"]);
   const pesajeId = Number(texto(formData, "pesaje_id"));
   const resultado = guardarObservacionPesaje(getDb(), pesajeId, texto(formData, "observacion"));
   if (!resultado.ok) return { error: resultado.error };
@@ -268,7 +301,7 @@ export async function crearRecepcion(
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
-  await exigirAdmin();
+  await exigirRango(["administrador", "recepcionista"]);
   const validado = validarRecepcion({
     fecha: texto(formData, "fecha"),
     tag: texto(formData, "tag"),
@@ -284,7 +317,7 @@ export async function crearRecepcion(
   });
   if (!resultado.ok) return { error: resultado.error };
   refrescar();
-  return { ok: true, tag: resultado.value.tag };
+  redirect(`/entradas?etiqueta=${resultado.value.tag}`);
 }
 
 export async function validarTransferencia(formData: FormData) {

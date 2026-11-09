@@ -47,7 +47,7 @@ export function BuscarMiniLote({ inicial, fichas }: { inicial: string; fichas: F
     <div className="grid gap-6">
       <CampoFiltro
         etiqueta="Código del mini lote"
-        placeholder="Escribe ML, el número o el TAG"
+        placeholder="Escribe el código del mini lote o el TAG"
         valor={texto}
         alCambiar={setTexto}
         mono

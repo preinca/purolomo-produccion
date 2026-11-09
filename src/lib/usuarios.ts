@@ -15,12 +15,19 @@ export type Usuario = {
 
 const DURACION = 1000 * 60 * 60 * 12;
 
+function rangoDe(valor: unknown): Rango {
+  if (valor === "administrador" || valor === "recepcionista" || valor === "pesador" || valor === "consulta") {
+    return valor;
+  }
+  return "consulta";
+}
+
 function filaUsuario(row: Record<string, unknown>): Usuario {
   return {
     id: Number(row.id),
     nombre: String(row.nombre),
     usuario: String(row.usuario),
-    rango: row.rango === "administrador" ? "administrador" : "consulta",
+    rango: rangoDe(row.rango),
     activo: Number(row.activo) === 1,
   };
 }
@@ -47,8 +54,13 @@ export function validarCuenta(input: { nombre: string; usuario: string; clave: s
     return { ok: false as const, error: "El usuario lleva de 3 a 20 letras o números, sin espacios." };
   }
   if (clave.length < 4) return { ok: false as const, error: "La clave tiene que tener al menos 4 caracteres." };
-  if (input.rango !== "administrador" && input.rango !== "consulta") {
-    return { ok: false as const, error: "Elige el rango administrador o consulta." };
+  if (
+    input.rango !== "administrador" &&
+    input.rango !== "consulta" &&
+    input.rango !== "recepcionista" &&
+    input.rango !== "pesador"
+  ) {
+    return { ok: false as const, error: "Elige el rango del usuario." };
   }
   const rango: Rango = input.rango;
   return { ok: true as const, value: { nombre, usuario, clave, rango } };
@@ -119,7 +131,7 @@ export async function guardarSesion(usuario: Usuario) {
 
 export async function borrarSesion() {
   const jar = await cookies();
-  jar.delete("sesion");
+  jar.set("sesion", "", { httpOnly: true, sameSite: "lax", path: "/", maxAge: 0 });
 }
 
 export async function exigirSesion() {
@@ -129,7 +141,11 @@ export async function exigirSesion() {
 }
 
 export async function exigirAdmin() {
+  return exigirRango(["administrador"]);
+}
+
+export async function exigirRango(roles: Rango[]) {
   const sesion = await exigirSesion();
-  if (sesion.rango !== "administrador") redirect("/");
+  if (!roles.includes(sesion.rango)) redirect("/");
   return sesion;
 }

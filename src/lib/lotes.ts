@@ -2,6 +2,7 @@ import type { SqliteDb } from "./db";
 import { destinoValido } from "./destinos";
 import { lineaPorId } from "./lineas";
 import { fechaValida, semanaDe } from "./formato";
+import { siguienteToken } from "./minilote";
 import { productoPorCodigo, type EstadoLote } from "./mpc";
 
 export type Lote = {
@@ -202,6 +203,14 @@ export function insertarRecepcion(db: SqliteDb, nuevo: NuevoLote): Resultado<Lot
   return { ok: true, value: lote };
 }
 
+export function listarLotesPorRecepcion(db: SqliteDb, limite = 1000) {
+  const tope = Math.min(Math.max(limite, 1), 2000);
+  const rows = db
+    .prepare("SELECT * FROM lotes ORDER BY creado_en DESC, tag DESC LIMIT ?")
+    .all(tope) as SqlRow[];
+  return rows.map(filaLote);
+}
+
 export function buscarLote(db: SqliteDb, tag: string) {
   const row = db.prepare("SELECT * FROM lotes WHERE tag = ?").get(tag.trim()) as SqlRow | undefined;
   return row ? filaLote(row) : null;
@@ -330,10 +339,7 @@ export function registrarDespacho(
        VALUES (?, 'despacho', ?, ?, ?, 'RECIBIDO', ?, ?, ?)`,
     ).run(lote.tag, input.fecha, semana, input.kg, input.nota ?? "", destino, linea.id);
     if (input.minilote) {
-      const correlativo = db
-        .prepare("SELECT COALESCE(MAX(CAST(SUBSTR(token, 3) AS INTEGER)), 0) AS n FROM minilotes")
-        .get() as { n: number };
-      token = `ML${String(Number(correlativo.n) + 1).padStart(6, "0")}`;
+      token = siguienteToken(db);
       db.prepare(
         `INSERT INTO minilotes (token, tag, pesaje_id, tipo, kg, destino, linea)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,

@@ -44,7 +44,7 @@ async function Entrada({
           <h1 className="text-2xl font-semibold">{primero ? "Crear administrador" : "Iniciar sesión"}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {primero
-              ? "La primera vez se crea el usuario administrador. Después, desde Usuarios, se agregan las cuentas de consulta."
+              ? "La primera vez se crea el usuario administrador. Después, desde Usuarios, se agregan recepcionista, pesador y consulta."
               : "Entra con tu usuario para ver el almacén y los pesajes."}
           </p>
         </div>

@@ -50,6 +50,8 @@ async function Consulta({
         tipo: linea.tipo,
         usado: linea.usado,
         objetivo: linea.objetivo,
+        minimo: linea.minimo,
+        maximo: linea.maximo,
       })),
       minis: listarMiniLotes(db, pesaje.id).map((mini) => {
         const lote = buscarLote(db, mini.tag);

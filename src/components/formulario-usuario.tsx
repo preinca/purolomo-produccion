@@ -30,6 +30,8 @@ export function FormularioUsuario() {
         Rango
         <select name="rango" defaultValue="consulta" className="h-11 rounded-lg border border-input bg-white px-3 text-base font-normal">
           <option value="consulta">Consulta</option>
+          <option value="recepcionista">Recepcionista</option>
+          <option value="pesador">Pesador</option>
           <option value="administrador">Administrador</option>
         </select>
       </label>

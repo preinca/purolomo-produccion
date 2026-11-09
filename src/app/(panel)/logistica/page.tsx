@@ -44,12 +44,29 @@ async function Registro() {
 
   return (
     <Card>
-      <CardContent className="pt-4">
+      <CardContent className="min-w-0 pt-4">
         {filas.length === 0 ? (
           <p className="rounded-xl bg-[#f4f6f8] px-4 py-8 text-center text-base text-muted-foreground">
             Todavía no hay salidas hacia logística.
           </p>
         ) : (
+          <>
+          <div className="grid gap-3 md:hidden">
+            {filas.map((fila) => (
+              <article key={fila.id} className="grid gap-1 rounded-xl border p-4 text-sm">
+                <Link href={`/lote/${fila.tag}`} className="font-mono text-lg font-semibold hover:underline">
+                  {fila.tag}
+                </Link>
+                <p className="font-medium">{fila.producto}</p>
+                <p className="text-muted-foreground">
+                  {fila.tipo} · {formatoFecha(fila.fecha)} · {fila.semana}
+                </p>
+                <p className="font-semibold tabular-nums">{formatoKg(fila.kg)}</p>
+                <p className="text-xs">{fila.nota || "—"}</p>
+              </article>
+            ))}
+          </div>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -80,6 +97,8 @@ async function Registro() {
               ))}
             </TableBody>
           </Table>
+          </div>
+          </>
         )}
       </CardContent>
     </Card>

@@ -31,9 +31,7 @@ export function CargarRecetaForm() {
         <Input id="archivo" name="archivo" type="file" accept=".xlsx,.xls" required />
       </div>
       <p className="text-sm text-muted-foreground">
-        Dos columnas: Tipo y Kg. En la línea 1 el objetivo es 740 kg y la suma puede variar 15 kg, entre 725 y
-        755 kg. Por ejemplo GL 340, CH 240 y CHEXT 150. En la línea 2 los kilos van al doble: el objetivo es 1480
-        kg y la suma queda entre 1450 y 1510 kg, por ejemplo GL 680, CH 480 y CHEXT 300.
+        Las celdas amarillas se guardan al subir el archivo: tolerancia, mínimo y máximo del pesaje de Alibal y de cada materia prima.
       </p>
       {estado?.error ? (
         <p role="alert" className="text-sm text-destructive">

@@ -20,12 +20,12 @@ export function QrEtiqueta({ lote, retiros = [] }: { lote: Lote; retiros?: Retir
         </div>
         <p className="font-mono text-lg font-bold">{lote.tag}</p>
       </div>
-      <div className="mt-3 grid grid-cols-[7rem_1fr] items-start gap-3">
+      <div className="mt-3 grid grid-cols-1 items-start gap-3 sm:grid-cols-[7rem_1fr]">
         <div
           className="overflow-hidden rounded-md bg-white"
           dangerouslySetInnerHTML={{ __html: svg }}
         />
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+        <dl className="grid grid-cols-1 gap-x-3 gap-y-1 text-[11px] min-[420px]:grid-cols-2">
           <Dato etiqueta="Fecha" valor={formatoFecha(lote.fecha)} />
           <Dato etiqueta="Semana" valor={lote.semana} />
           <Dato etiqueta="Producto" valor={lote.producto} />

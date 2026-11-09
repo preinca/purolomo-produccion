@@ -1,8 +1,9 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
-import { abrirPesajeFormulario, consumirPesajeFormulario, loteActualDesdeTag, numeroSiguientePesaje, type EstadoFormulario, type LoteLeido } from "@/app/actions";
+import { abrirPesajeFormulario, consumirPesajeFormulario, finalizarPesajeFormulario, guardarObservacionPesajeFormulario, loteActualDesdeTag, numeroSiguientePesaje, quitarKgPesajeFormulario, type EstadoFormulario, type LoteLeido } from "@/app/actions";
 import { EscanerSalida } from "@/components/escaner-salida";
+import { FormObservacion } from "@/components/form-observacion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,36 +26,44 @@ export type PesajeVista = {
   linea: string;
   objetivo: number;
   tolerancia: number;
+  minimo: number;
+  maximo: number;
   total: number;
-  lineas: { tipo: string; objetivo: number; usado: number }[];
+  lineas: { tipo: string; objetivo: number; usado: number; tolerancia?: number; minimo?: number; maximo?: number }[];
   codigo: string;
+  finalizado: boolean;
+  observaciones: string;
   trazas: TrazaPesaje[];
 };
 
 export function SalidaAlibal({
   hoy,
   lineasConReceta,
-  pesajes,
   existencias,
   pesaje,
   enCurso,
   numeroSiguiente,
+  token,
 }: {
   hoy: string;
   lineasConReceta: string[];
-  pesajes: { id: number; numero: number; fecha: string; linea: string; codigo: string; trazas: TrazaPesaje[] }[];
   existencias: { tag: string; tipo: string; kg: number }[];
   pesaje: PesajeVista | null;
   enCurso: { id: number; numero: number; linea: string; fecha: string } | null;
   numeroSiguiente: number;
+  token?: string;
 }) {
   return (
     <div className="grid gap-8">
+      <div className="rounded-2xl border border-purolomo-red bg-white px-5 py-4">
+        <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Producto del pesaje</p>
+        <p className="mt-1 text-2xl font-semibold">{PRODUCTO}</p>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Abrir pesaje</CardTitle>
           <CardDescription>
-            La fecha y la línea definen el pesaje. El número sigue solo y no se abre otro hasta terminar el actual.
+            El pesaje es de {PRODUCTO}. La fecha y la línea lo definen. El número sigue solo y no se abre otro hasta terminar el actual.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -69,7 +78,6 @@ export function SalidaAlibal({
           ) : (
             <AbrirPesaje
               hoy={hoy}
-              pesajes={pesajes}
               lineasConReceta={lineasConReceta}
               activoId={pesaje?.id}
               enCurso={enCurso}
@@ -81,13 +89,13 @@ export function SalidaAlibal({
       {pesaje ? (
         <Card>
           <CardHeader>
-            <CardTitle>Registrar consumo</CardTitle>
+            <CardTitle>Registrar consumo de {pesaje.destino}</CardTitle>
             <CardDescription>
-              Pesaje {pesaje.numero} · línea {pesaje.linea}. Escanea el QR o escribe el número de TAG y confirma los kilos.
+              Pesaje {pesaje.numero} de {pesaje.destino} · línea {pesaje.linea}. Escanea el QR o escribe el número de TAG y confirma los kilos.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Consumir pesaje={pesaje} existencias={existencias} />
+            <Consumir pesaje={pesaje} existencias={existencias} token={token ?? ""} />
           </CardContent>
         </Card>
       ) : null}
@@ -97,14 +105,12 @@ export function SalidaAlibal({
 
 function AbrirPesaje({
   hoy,
-  pesajes,
   lineasConReceta,
   activoId,
   enCurso,
   numeroSiguiente,
 }: {
   hoy: string;
-  pesajes: { id: number; numero: number; fecha: string; linea: string; codigo: string; trazas: TrazaPesaje[] }[];
   lineasConReceta: string[];
   activoId?: number;
   enCurso: { id: number; numero: number; linea: string; fecha: string } | null;
@@ -138,14 +144,20 @@ function AbrirPesaje({
           {enCurso.id !== activoId ? (
             <>
               {" "}
-              <a href={`/salidas?pesaje=${enCurso.id}`} className="font-medium underline">
+              <a href={`/salidas?modo=consumo&producto=${encodeURIComponent(PRODUCTO)}&pesaje=${enCurso.id}`} className="font-medium underline">
                 Continuar ese pesaje
               </a>
             </>
           ) : null}
         </p>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-1.5">
+          <Label htmlFor="producto-pesaje">Producto</Label>
+          <p id="producto-pesaje" className="flex h-11 items-center rounded-lg border bg-white px-3 text-base font-semibold">
+            {PRODUCTO}
+          </p>
+        </div>
         <div className="grid gap-1.5">
           <Label htmlFor="fecha">Fecha</Label>
           <Input
@@ -190,24 +202,6 @@ function AbrirPesaje({
           {estado.error}
         </p>
       ) : null}
-      {pesajes.length > 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {pesajes.map((item) => (
-            <a
-              key={item.id}
-              href={`/salidas?pesaje=${item.id}`}
-              className={`grid gap-1 rounded-xl border px-4 py-3 text-sm hover:bg-muted ${item.id === activoId ? "border-primary bg-white" : "bg-white"}`}
-            >
-              <span className="text-base font-semibold">Pesaje {item.numero}</span>
-              <span className="text-muted-foreground">
-                Línea {item.linea} · {item.fecha}
-                {item.trazas.length > 0 ? ` · ${item.trazas.length} retiro${item.trazas.length === 1 ? "" : "s"}` : ""}
-              </span>
-              {item.codigo ? <span className="font-mono text-xs leading-5 break-all">{item.codigo}</span> : null}
-            </a>
-          ))}
-        </div>
-      ) : null}
     </form>
   );
 }
@@ -215,9 +209,11 @@ function AbrirPesaje({
 function Consumir({
   pesaje,
   existencias,
+  token,
 }: {
   pesaje: PesajeVista;
   existencias: { tag: string; tipo: string; kg: number }[];
+  token: string;
 }) {
   const [estado, accion, pendiente] = useActionState<EstadoFormulario, FormData>(consumirPesajeFormulario, null);
   const [tag, setTag] = useState("");
@@ -230,8 +226,8 @@ function Consumir({
   const partida = pesaje.lineas.find((linea) => linea.tipo === lectura?.tipoCodigo) ?? null;
   const maximo = useMemo(() => {
     if (!lectura || !partida) return 0;
-    const faltaTipo = Math.max(0, partida.objetivo + pesaje.tolerancia - partida.usado);
-    const faltaTotal = Math.max(0, pesaje.objetivo + pesaje.tolerancia - pesaje.total);
+    const faltaTipo = Math.max(0, (partida.maximo ?? partida.objetivo + (partida.tolerancia ?? pesaje.tolerancia)) - partida.usado);
+    const faltaTotal = Math.max(0, pesaje.maximo - pesaje.total);
     return Math.round(Math.min(lectura.kgRestantes, faltaTipo, faltaTotal) * 1000) / 1000;
   }, [lectura, partida, pesaje]);
   const faltaDelTipo = partida ? Math.max(0, partida.objetivo - partida.usado) : 0;
@@ -254,9 +250,9 @@ function Consumir({
       setKg("");
       return;
     }
-    const faltaObjetivo = Math.max(0, linea.objetivo - linea.usado);
-    const faltaTipo = Math.max(0, linea.objetivo + pesaje.tolerancia - linea.usado);
-    const faltaTotal = Math.max(0, pesaje.objetivo + pesaje.tolerancia - pesaje.total);
+    const faltaObjetivo = Math.max(0, (linea.minimo ?? linea.objetivo) - linea.usado);
+    const faltaTipo = Math.max(0, (linea.maximo ?? linea.objetivo + (linea.tolerancia ?? pesaje.tolerancia)) - linea.usado);
+    const faltaTotal = Math.max(0, pesaje.maximo - pesaje.total);
     const tope = Math.min(leido.kgRestantes, faltaTipo, faltaTotal);
     const sugerido = Math.min(tope, faltaObjetivo > 0 ? faltaObjetivo : tope);
     setKg(sugerido > 0 ? String(Math.round(sugerido * 1000) / 1000) : "");
@@ -295,19 +291,18 @@ function Consumir({
   }, [tag, pesaje]);
 
   return (
-    <form
-      action={accion}
-      className="grid gap-6"
-      onSubmit={(event) => {
-        if (fueraDeReceta || enLogistica) event.preventDefault();
-      }}
-    >
-      <input type="hidden" name="pesaje_id" value={pesaje.id} />
-      <div className="grid gap-3 sm:grid-cols-3">
+    <div className="grid gap-6">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl bg-[#f4f6f8] px-4 py-3">
+          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Producto</p>
+          <p className="mt-1 text-2xl font-semibold">{pesaje.destino}</p>
+        </div>
         <div className="rounded-xl bg-[#f4f6f8] px-4 py-3">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Llevamos</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">{formatoKg(pesaje.total)}</p>
-          <p className="text-sm text-muted-foreground">de {formatoKg(pesaje.objetivo)}</p>
+          <p className="text-sm text-muted-foreground">
+            rango {formatoKg(pesaje.minimo)} a {formatoKg(pesaje.maximo)} · tolerancia {formatoKg(pesaje.tolerancia)}
+          </p>
         </div>
         <div className="rounded-xl bg-[#f4f6f8] px-4 py-3 sm:col-span-2">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Código del pesaje</p>
@@ -320,12 +315,52 @@ function Consumir({
             <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{linea.tipo}</p>
             <p className="mt-1 text-xl font-semibold tabular-nums">{formatoKg(linea.usado)}</p>
             <p className="text-sm text-muted-foreground">
-              de {formatoKg(linea.objetivo)}
-              {linea.usado + 0.001 < linea.objetivo ? ` · faltan ${formatoKg(linea.objetivo - linea.usado)}` : " · listo"}
+              rango {formatoKg(linea.minimo ?? linea.objetivo)} a {formatoKg(linea.maximo ?? linea.objetivo)}
+              {" · "}
+              tolerancia {formatoKg(linea.tolerancia ?? pesaje.tolerancia)}
+              {linea.usado + 0.001 < (linea.minimo ?? linea.objetivo)
+                ? ` · faltan ${formatoKg((linea.minimo ?? linea.objetivo) - linea.usado)}`
+                : " · listo"}
             </p>
           </div>
         ))}
       </div>
+      {pesaje.finalizado ? null : (
+      <>
+      {pesaje.trazas.length > 0 ? (
+        <div className="grid gap-3">
+          <div>
+            <p className="text-base font-medium">Kg cargados</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Si al escanear el QR o al colocar el TAG los kilos quedaron mal, quítalos y vuelve a cargarlos.
+            </p>
+          </div>
+          {pesaje.trazas.map((mini) => (
+            <article
+              key={mini.token}
+              className={`flex flex-col gap-3 rounded-xl border bg-white p-4 sm:flex-row sm:items-center sm:justify-between ${tag.trim() === mini.tag ? "border-primary" : ""}`}
+            >
+              <div>
+                <p className="font-medium">
+                  {mini.tipo} · {formatoKg(mini.kg)}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  TAG <span className="font-mono">{mini.tag}</span> · <span className="font-mono">{mini.token}</span>
+                </p>
+              </div>
+              <QuitarKg pesajeId={pesaje.id} token={mini.token} />
+            </article>
+          ))}
+        </div>
+      ) : null}
+      <form
+        action={accion}
+        className="grid gap-6"
+        onSubmit={(event) => {
+          if (fueraDeReceta || enLogistica) event.preventDefault();
+        }}
+      >
+      <input type="hidden" name="pesaje_id" value={pesaje.id} />
       <EscanerSalida onLeido={elegir} />
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="grid gap-1.5">
@@ -463,6 +498,142 @@ function Consumir({
       <Button type="submit" size="lg" disabled={pendiente || fueraDeReceta || enLogistica} className="w-fit">
         {pendiente ? "Guardando…" : "Registrar consumo"}
       </Button>
+      </form>
+      </>
+      )}
+      {pesaje.finalizado ? (
+        <div className="grid gap-2 rounded-xl border border-primary bg-white px-4 py-4">
+          <p className="text-sm font-medium">Pesaje finalizado. Ya quedó en el registro.</p>
+          <p className="font-mono text-2xl leading-snug font-semibold break-all">{pesaje.codigo}</p>
+        </div>
+      ) : pesaje.lineas.length > 0 &&
+        pesaje.total + 0.001 >= pesaje.minimo &&
+        pesaje.total <= pesaje.maximo + 0.001 &&
+        pesaje.lineas.every((linea) => linea.usado + 0.001 >= (linea.minimo ?? linea.objetivo) && linea.usado <= (linea.maximo ?? linea.objetivo) + 0.001) ? (
+        <>
+          {pesaje.trazas.length > 0 ? <Retiros pesaje={pesaje} token={token} /> : null}
+          <FormObservacion
+            key={`${pesaje.id}-${pesaje.observaciones}`}
+            accion={guardarObservacionPesajeFormulario}
+            campoId="pesaje_id"
+            id={String(pesaje.id)}
+            valor={pesaje.observaciones}
+            etiqueta="Observación de este pesaje"
+          />
+          {pesaje.observaciones.trim() ? (
+            <p className="rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-950">
+              Observación: {pesaje.observaciones.trim()}
+            </p>
+          ) : null}
+          <FinalizarPesaje pesajeId={pesaje.id} />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function Retiros({ pesaje, token }: { pesaje: PesajeVista; token: string }) {
+  return (
+    <div className="grid gap-5 border-t pt-6">
+      <div>
+        <p className="text-base font-medium">Retiros de este pesaje</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Cada retiro queda con su mini lote, el TAG y los kilos. Si un tipo usa dos TAG, aparecen los dos.
+        </p>
+      </div>
+      {pesaje.codigo ? (
+            <div className="grid gap-2">
+              <p className="rounded-lg bg-muted px-3 py-2 font-mono text-sm break-all">{pesaje.codigo}</p>
+              <a
+                href={`/qr/pesaje/${pesaje.id}`}
+                download={`qr-pesaje-${pesaje.numero}.png`}
+                className="w-fit text-sm font-medium underline"
+              >
+                Descargar el QR del pesaje
+              </a>
+            </div>
+          ) : null}
+          {pesaje.trazas.map((mini) => (
+            <article
+              key={mini.token}
+              className={`grid gap-4 rounded-xl border bg-white p-5 ${token === mini.token ? "border-primary" : ""}`}
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="font-mono text-base font-semibold">{mini.token}</p>
+                <p className="text-base font-semibold tabular-nums">{formatoKg(mini.kg)}</p>
+              </div>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Tipo</dt>
+                  <dd className="mt-0.5 font-medium">{mini.tipo}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">TAG</dt>
+                  <dd className="mt-0.5 font-mono font-medium">{mini.tag}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Pesaje</dt>
+                  <dd className="mt-0.5 font-medium">{pesaje.numero}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Línea</dt>
+                  <dd className="mt-0.5 font-medium">{pesaje.linea}</dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-xs text-muted-foreground">Producto</dt>
+                  <dd className="mt-0.5 font-medium">{pesaje.destino}</dd>
+                </div>
+              </dl>
+              <div className="flex flex-wrap items-center gap-3">
+                <a
+                  href={`/qr/imagen/${mini.tag}`}
+                  download={`qr-${mini.tag}.png`}
+                  className="w-fit text-sm font-medium underline"
+                >
+                  Descargar el QR del TAG
+                </a>
+                {pesaje.finalizado ? null : <QuitarKg pesajeId={pesaje.id} token={mini.token} />}
+              </div>
+            </article>
+          ))}
+    </div>
+  );
+}
+
+function QuitarKg({ pesajeId, token }: { pesajeId: number; token: string }) {
+  const [estado, accion, pendiente] = useActionState<EstadoFormulario, FormData>(quitarKgPesajeFormulario, null);
+  return (
+    <form action={accion} className="grid gap-2">
+      <input type="hidden" name="pesaje_id" value={pesajeId} />
+      <input type="hidden" name="token" value={token} />
+      <Button type="submit" variant="outline" disabled={pendiente} className="h-11">
+        {pendiente ? "Quitando…" : "Quitar kg"}
+      </Button>
+      {estado?.error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {estado.error}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
+function FinalizarPesaje({ pesajeId }: { pesajeId: number }) {
+  const [estado, accion, pendiente] = useActionState<EstadoFormulario, FormData>(finalizarPesajeFormulario, null);
+  return (
+    <form action={accion} className="grid gap-4">
+      <input type="hidden" name="pesaje_id" value={pesajeId} />
+      <p className="rounded-xl bg-green-600 px-4 py-4 text-base font-medium text-white">
+        Todos los kilos del pesaje ya están cargados. Ya puedes procesar la salida del pesaje.
+      </p>
+      <Button type="submit" disabled={pendiente} className="h-14 w-full text-lg">
+        {pendiente ? "Finalizando…" : "Registrar pesaje"}
+      </Button>
+      {estado?.error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {estado.error}
+        </p>
+      ) : null}
     </form>
   );
 }

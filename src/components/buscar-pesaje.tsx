@@ -16,7 +16,7 @@ export type FichaPesaje = {
   total: number;
   codigo: string;
   observaciones: string;
-  lineas: { tipo: string; usado: number; objetivo: number }[];
+  lineas: { tipo: string; usado: number; objetivo: number; minimo?: number; maximo?: number }[];
   minis: { token: string; tipo: string; kg: number; tag: string; destino: string; disponibles: number | null }[];
 };
 
@@ -106,7 +106,7 @@ function Detalle({ ficha }: { ficha: FichaPesaje }) {
               <span className="font-medium">{linea.tipo}</span>
               <span className="text-muted-foreground">
                 {" "}
-                {formatoKg(linea.usado)} de {formatoKg(linea.objetivo)}
+                {formatoKg(linea.usado)} · rango {formatoKg(linea.minimo ?? linea.objetivo)} a {formatoKg(linea.maximo ?? linea.objetivo)}
               </span>
             </p>
           ))}

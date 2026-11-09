@@ -23,6 +23,7 @@ import { lineaPorId } from "@/lib/lineas";
 import { buscarLote, kgConsumidosDe, kgDisponiblesDe, kgRestantes, movimientosDeTag, tagAgotado } from "@/lib/lotes";
 import { productoPorCodigo } from "@/lib/mpc";
 import { retirosDeTag } from "@/lib/pesajes";
+import { leerSesion } from "@/lib/usuarios";
 
 export default function Page({ params }: PageProps<"/lote/[tag]">) {
   return (
@@ -38,6 +39,8 @@ async function Detalle({ params }: { params: Promise<{ tag: string }> }) {
   const db = getDb();
   const lote = buscarLote(db, tag);
   if (!lote) notFound();
+  const rango = (await leerSesion())?.rango;
+  const puedeAvisar = rango === "administrador" || rango === "recepcionista";
   const tipo = productoPorCodigo(lote.codigo);
   const movimientos = movimientosDeTag(db, lote.tag);
   const retiros = retirosDeTag(db, lote.tag);
@@ -92,21 +95,23 @@ async function Detalle({ params }: { params: Promise<{ tag: string }> }) {
               Observación: {lote.observaciones.trim()}
             </p>
           ) : null}
-          <Card>
-            <CardHeader>
-              <CardTitle>Observación del TAG</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FormObservacion
-                key={`${lote.tag}-${lote.observaciones}`}
-                accion={guardarObservacionTagFormulario}
-                campoId="tag"
-                id={lote.tag}
-                valor={lote.observaciones}
-                etiqueta="Aviso de esta materia prima"
-              />
-            </CardContent>
-          </Card>
+          {puedeAvisar ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Observación del TAG</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <FormObservacion
+                  key={`${lote.tag}-${lote.observaciones}`}
+                  accion={guardarObservacionTagFormulario}
+                  campoId="tag"
+                  id={lote.tag}
+                  valor={lote.observaciones}
+                  etiqueta="Aviso de esta materia prima"
+                />
+              </CardContent>
+            </Card>
+          ) : null}
           <Card>
             <CardHeader>
               <CardTitle>Movimientos</CardTitle>

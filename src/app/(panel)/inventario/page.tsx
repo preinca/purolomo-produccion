@@ -20,7 +20,18 @@ export default function Page() {
         <CardHeader>
           <CardTitle>Materia prima cárnica</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0">
+          <div className="grid gap-3 md:hidden">
+            {PRODUCTOS_MPC.map((producto) => (
+              <article key={producto.codigo} className="grid gap-1 rounded-xl border p-4 text-sm">
+                <p className="text-lg font-semibold">{producto.tipo}</p>
+                <p>{producto.nombre}</p>
+                <p className="font-mono text-xs">{producto.codigo}</p>
+                <p className="text-muted-foreground">{producto.descripcion}</p>
+              </article>
+            ))}
+          </div>
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -41,6 +52,7 @@ export default function Page() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </PageFrame>

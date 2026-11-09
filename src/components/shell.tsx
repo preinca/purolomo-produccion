@@ -17,6 +17,7 @@ import {
   Rows3,
   Search,
   Truck,
+  Tag,
   Trash2,
   Users,
   X,
@@ -24,39 +25,42 @@ import {
 import { cerrarSesion } from "@/app/usuarios-acciones";
 import { BuscadorGlobal } from "@/components/buscador-global";
 import { LogoPurolomo } from "@/components/logo";
-import type { Rango } from "@/lib/acceso";
+import { nombreRango, type Rango } from "@/lib/acceso";
 import type { Sugerencia } from "@/lib/sugerencia";
 import { cn } from "@/lib/utils";
+
+const todos: Rango[] = ["administrador", "consulta", "recepcionista", "pesador"];
 
 const grupos = [
   {
     titulo: "Principal",
     items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard, admin: false },
-      { href: "/stock", label: "Stock disponible", icon: PackageSearch, admin: false },
+      { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: todos },
+      { href: "/stock", label: "Stock disponible", icon: PackageSearch, roles: todos },
     ],
   },
   {
     titulo: "Operaciones",
     items: [
-      { href: "/inventario", label: "Catálogo CDM", icon: ClipboardList, admin: false },
-      { href: "/entradas", label: "Registrar entradas", icon: ArrowDownToLine, admin: true },
-      { href: "/receta", label: "Cargar receta", icon: FileSpreadsheet, admin: true },
-      { href: "/salidas", label: "Registrar salidas", icon: ArrowUpFromLine, admin: false },
-      { href: "/logistica", label: "Registro de Logística", icon: Truck, admin: false },
-      { href: "/pesajes", label: "Registro de pesajes", icon: Rows3, admin: false },
-      { href: "/minilotes", label: "Buscar mini lote", icon: Search, admin: false },
-      { href: "/consulta-pesaje", label: "Buscar pesaje", icon: FileSearch, admin: false },
-      { href: "/qr", label: "Consultar Qrs", icon: QrCode, admin: false },
-      { href: "/eliminar", label: "Eliminar lote", icon: Trash2, admin: true },
-      { href: "/usuarios", label: "Usuarios", icon: Users, admin: true },
+      { href: "/inventario", label: "Catálogo CDM", icon: ClipboardList, roles: todos },
+      { href: "/entradas", label: "Registrar entradas", icon: ArrowDownToLine, roles: ["administrador", "recepcionista"] as Rango[] },
+      { href: "/receta", label: "Cargar receta", icon: FileSpreadsheet, roles: ["administrador"] as Rango[] },
+      { href: "/salidas", label: "Registrar salidas", icon: ArrowUpFromLine, roles: ["administrador", "pesador"] as Rango[] },
+      { href: "/logistica", label: "Registro de Logística", icon: Truck, roles: todos },
+      { href: "/pesajes", label: "Registro de pesajes", icon: Rows3, roles: todos },
+      { href: "/minilotes", label: "Buscar mini lote", icon: Search, roles: todos },
+      { href: "/consulta-pesaje", label: "Buscar pesaje", icon: FileSearch, roles: todos },
+      { href: "/qr", label: "Consultar Qrs", icon: QrCode, roles: todos },
+      { href: "/etiquetas", label: "Etiquetas en Cava", icon: Tag, roles: todos },
+      { href: "/eliminar", label: "Eliminar lote", icon: Trash2, roles: ["administrador"] as Rango[] },
+      { href: "/usuarios", label: "Usuarios", icon: Users, roles: ["administrador"] as Rango[] },
     ],
   },
   {
     titulo: "Historiales",
     items: [
-      { href: "/historial/entradas", label: "Hist. entradas", icon: History, admin: false },
-      { href: "/historial/salidas", label: "Hist. salidas", icon: History, admin: false },
+      { href: "/historial/entradas", label: "Hist. entradas", icon: History, roles: todos },
+      { href: "/historial/salidas", label: "Hist. salidas", icon: History, roles: todos },
     ],
   },
 ];
@@ -86,7 +90,7 @@ export function Shell({
   const menu = grupos
     .map((grupo) => ({
       ...grupo,
-      items: grupo.items.filter((item) => rango === "administrador" || !item.admin),
+      items: grupo.items.filter((item) => item.roles.includes(rango)),
     }))
     .filter((grupo) => grupo.items.length > 0);
 
@@ -130,7 +134,7 @@ export function Shell({
                         href={item.href}
                         onClick={cerrarMenu}
                         className={cn(
-                          "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm",
+                          "flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2.5 text-base sm:text-sm",
                           on
                             ? "bg-purolomo-red font-semibold text-white"
                             : "text-white/80 hover:bg-white/10",
@@ -152,7 +156,7 @@ export function Shell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-black/5 bg-white px-3 py-2.5 print:hidden sm:px-5">
+        <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-black/5 bg-white px-3 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] print:hidden sm:gap-3 sm:px-5">
           <label
             htmlFor="menu-lateral"
             className="cursor-pointer rounded-md p-1.5 hover:bg-muted lg:hidden"
@@ -161,11 +165,11 @@ export function Shell({
             <Menu className="size-5" />
           </label>
           <BuscadorGlobal sugerencias={sugerencias} />
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <div className="hidden text-right sm:block">
               <p className="text-xs font-semibold leading-tight">{nombre}</p>
               <p className="text-[10px] tracking-wide text-muted-foreground uppercase">
-                {rango === "administrador" ? "Administrador" : "Consulta"}
+                {nombreRango(rango)}
               </p>
             </div>
             <form action={cerrarSesion}>

@@ -144,7 +144,7 @@ function Campos({
         />
       </Campo>
       <Button type="submit" size="lg" disabled={pendiente} className="w-full sm:w-auto">
-        {pendiente ? "Guardando…" : "Registrar entrada y generar QR"}
+        {pendiente ? "Guardando…" : "Registrar entrada y generar etiqueta"}
       </Button>
     </form>
   );

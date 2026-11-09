@@ -15,7 +15,7 @@ export async function GET(
   const receta = recetaVigente(getDb(), linea);
   if (!receta) return new Response("No hay receta para esa línea", { status: 404 });
 
-  const archivo = excelDeReceta(receta);
+  const archivo = await excelDeReceta(receta);
   return new Response(new Uint8Array(archivo), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

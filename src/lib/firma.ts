@@ -11,9 +11,9 @@ export type Sesion = {
   exp: number;
 };
 
-// TEMPORAL (fase de prueba): con `true` no se pide iniciar sesión y todos entran
-// como administrador de demostración. Para volver a pedir usuario y clave, ponlo en `false`.
-export const LOGIN_DESACTIVADO = true;
+// Con `true` no se pide iniciar sesión y Salir no cierra nada: todos entran como
+// administrador de demostración. Déjalo en `false` para exigir usuario y clave.
+export const LOGIN_DESACTIVADO = false;
 
 export const SESION_DEMO: Sesion = {
   id: 0,
@@ -42,7 +42,14 @@ export function leerFirma(token: string | undefined | null): Sesion | null {
   try {
     const datos = JSON.parse(Buffer.from(cuerpo, "base64url").toString()) as Sesion;
     if (!Number.isFinite(datos.exp) || datos.exp < Date.now()) return null;
-    if (datos.rango !== "administrador" && datos.rango !== "consulta") return null;
+    if (
+      datos.rango !== "administrador" &&
+      datos.rango !== "consulta" &&
+      datos.rango !== "recepcionista" &&
+      datos.rango !== "pesador"
+    ) {
+      return null;
+    }
     if (!datos.usuario || !datos.nombre) return null;
     return datos;
   } catch {

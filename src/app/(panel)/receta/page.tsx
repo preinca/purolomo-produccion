@@ -61,10 +61,13 @@ async function Receta({
                 <p className="font-medium">
                   Alibal 1 kg · Línea {receta.linea} · {formatoKg(receta.objetivoKg)}
                 </p>
+                <p className="text-muted-foreground">
+                  Tolerancia del pesaje {formatoKg(receta.toleranciaKg)}. Rango {formatoKg(receta.minimoKg)} a {formatoKg(receta.maximoKg)}.
+                </p>
                 <ul className="grid gap-1">
                   {receta.items.map((item) => (
                     <li key={item.tipo}>
-                      {item.tipo}: {formatoKg(item.kg)}
+                      {item.tipo}: {formatoKg(item.kg)} · tolerancia {formatoKg(item.tolerancia ?? receta.toleranciaKg)} · rango {formatoKg(item.minimo ?? item.kg)} a {formatoKg(item.maximo ?? item.kg)}
                     </li>
                   ))}
                 </ul>
