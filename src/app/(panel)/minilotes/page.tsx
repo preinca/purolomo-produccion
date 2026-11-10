@@ -3,9 +3,9 @@ import { Suspense } from "react";
 import { BuscarMiniLote, type FichaMini } from "@/components/buscar-minilote";
 import { PageFrame } from "@/components/page-frame";
 import { getDb } from "@/lib/db";
-import { buscarLote, kgConsumidosDe, kgDisponiblesDe, tagAgotado } from "@/lib/lotes";
+import { buscarLotes, kgConsumidosDe, kgDisponiblesDe, tagAgotado } from "@/lib/lotes";
 import { productoPorCodigo } from "@/lib/mpc";
-import { codigoDelPesaje, listarMiniLotesTodos, listarPesajesTodos } from "@/lib/pesajes";
+import { codigosDePesajes, listarMiniLotesTodos, listarPesajesTodos } from "@/lib/pesajes";
 
 export default function Page({
   searchParams,
@@ -36,10 +36,17 @@ async function Consulta({
   await connection();
   const inicial = texto((await searchParams).codigo);
   const db = getDb();
-  const pesajes = listarPesajesTodos(db);
+  const [pesajes, minis] = await Promise.all([listarPesajesTodos(db), listarMiniLotesTodos(db)]);
   const porId = new Map(pesajes.map((pesaje) => [pesaje.id, pesaje]));
-  const fichas: FichaMini[] = listarMiniLotesTodos(db).map((mini) => {
-    const lote = buscarLote(db, mini.tag);
+  const [codigos, lotes] = await Promise.all([
+    codigosDePesajes(db, pesajes),
+    buscarLotes(
+      db,
+      minis.map((mini) => mini.tag),
+    ),
+  ]);
+  const fichas: FichaMini[] = minis.map((mini) => {
+    const lote = lotes.get(mini.tag);
     const tipo = lote ? productoPorCodigo(lote.codigo) : null;
     const pesaje = porId.get(mini.pesajeId);
     return {
@@ -51,7 +58,7 @@ async function Consulta({
       linea: mini.linea,
       pesaje: mini.numeroPesaje,
       fecha: pesaje?.fecha ?? "",
-      codigoPesaje: pesaje ? codigoDelPesaje(db, pesaje.id) : "",
+      codigoPesaje: pesaje ? (codigos.get(pesaje.id) ?? "") : "",
       materia: tipo ? `${tipo.descripcion} · ${lote?.codigo}` : lote?.producto ?? "—",
       recibidos: lote ? lote.kgRecibidos : null,
       consumidos: lote ? kgConsumidosDe(lote) : null,

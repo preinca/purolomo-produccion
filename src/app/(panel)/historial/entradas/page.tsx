@@ -21,7 +21,7 @@ export default function Page() {
 
 async function Historial() {
   await connection();
-  const lotes = listarLotes(getDb(), { limite: 300 });
+  const lotes = await listarLotes(getDb(), { limite: 300 });
   return (
     <Card>
       <CardContent className="pt-4">

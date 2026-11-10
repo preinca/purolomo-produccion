@@ -32,8 +32,8 @@ export default function Page() {
 async function Historial() {
   await connection();
   const db = getDb();
-  const despachos = listarMovimientos(db, "despacho", 200);
-  const consumos = listarMovimientos(db, "consumo", 200);
+  const despachos = await listarMovimientos(db, "despacho", 200);
+  const consumos = await listarMovimientos(db, "consumo", 200);
   const filas = [...despachos, ...consumos].sort((a, b) => b.id - a.id).slice(0, 200);
 
   return (

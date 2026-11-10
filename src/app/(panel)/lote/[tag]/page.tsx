@@ -37,13 +37,13 @@ async function Detalle({ params }: { params: Promise<{ tag: string }> }) {
   await connection();
   const { tag } = await params;
   const db = getDb();
-  const lote = buscarLote(db, tag);
+  const lote = await buscarLote(db, tag);
   if (!lote) notFound();
   const rango = (await leerSesion())?.rango;
   const puedeAvisar = rango === "administrador" || rango === "recepcionista";
   const tipo = productoPorCodigo(lote.codigo);
-  const movimientos = movimientosDeTag(db, lote.tag);
-  const retiros = retirosDeTag(db, lote.tag);
+  const movimientos = await movimientosDeTag(db, lote.tag);
+  const retiros = await retirosDeTag(db, lote.tag);
 
   return (
     <PageFrame

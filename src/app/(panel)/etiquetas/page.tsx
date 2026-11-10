@@ -41,8 +41,8 @@ async function Historial({
   const parametros = await searchParams;
   const pedido = leer(parametros.tag);
   const db = getDb();
-  const lotes = listarLotesPorRecepcion(db);
-  const elegido = /^\d{4,8}$/.test(pedido) ? buscarLote(db, pedido) : null;
+  const lotes = await listarLotesPorRecepcion(db);
+  const elegido = /^\d{4,8}$/.test(pedido) ? await buscarLote(db, pedido) : null;
   const visible = elegido ?? lotes[0] ?? null;
 
   return (

@@ -7,7 +7,7 @@ import { QrEnVivo } from "@/components/qr-en-vivo";
 import { QrPesaje } from "@/components/qr-pesaje";
 import { getDb } from "@/lib/db";
 import { listarLotes } from "@/lib/lotes";
-import { fichaQrPesaje, listarPesajesTodos, retirosDeTag } from "@/lib/pesajes";
+import { fichasQrPesajes, retirosDeTags } from "@/lib/pesajes";
 
 export default function Page({ searchParams }: PageProps<"/qr">) {
   return (
@@ -53,10 +53,15 @@ async function Contenido({
     </div>
   );
 
-  function Cava() {
-    const etiquetas = listarLotes(db, { limite: 300 }).map((lote) => ({
+  async function Cava() {
+    const lotes = await listarLotes(db, { limite: 300 });
+    const retiros = await retirosDeTags(
+      db,
+      lotes.map((lote) => lote.tag),
+    );
+    const etiquetas = lotes.map((lote) => ({
       lote,
-      retiros: retirosDeTag(db, lote.tag),
+      retiros: retiros.get(lote.tag) ?? [],
     }));
     return (
       <>
@@ -66,10 +71,8 @@ async function Contenido({
     );
   }
 
-  function Pesajes() {
-    const fichas = listarPesajesTodos(db)
-      .map((pesaje) => fichaQrPesaje(db, pesaje.id))
-      .filter((ficha) => ficha !== null);
+  async function Pesajes() {
+    const fichas = await fichasQrPesajes(db);
     if (fichas.length === 0) {
       return (
         <p className="rounded-xl bg-[#f4f6f8] px-4 py-8 text-center text-base text-muted-foreground">

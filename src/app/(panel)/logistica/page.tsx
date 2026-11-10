@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { getDb } from "@/lib/db";
 import { formatoFecha, formatoKg } from "@/lib/formato";
-import { buscarLote, listarMovimientos } from "@/lib/lotes";
+import { buscarLotes, listarMovimientos } from "@/lib/lotes";
 import { productoPorCodigo } from "@/lib/mpc";
 
 export default function Page() {
@@ -32,8 +32,13 @@ export default function Page() {
 async function Registro() {
   await connection();
   const db = getDb();
-  const filas = listarMovimientos(db, "transferencia", 300).map((movimiento) => {
-    const lote = buscarLote(db, movimiento.tag);
+  const movimientos = await listarMovimientos(db, "transferencia", 300);
+  const lotes = await buscarLotes(
+    db,
+    movimientos.map((movimiento) => movimiento.tag),
+  );
+  const filas = movimientos.map((movimiento) => {
+    const lote = lotes.get(movimiento.tag);
     const catalogo = lote ? productoPorCodigo(lote.codigo) : null;
     return {
       ...movimiento,

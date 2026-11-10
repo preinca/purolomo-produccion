@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.8.100", "*.trycloudflare.com", "*.ngrok-free.app", "*.ngrok-free.dev", "*.ngrok.app", "*.ngrok.io"],
-  serverExternalPackages: ["better-sqlite3", "xlsx"],
+  serverExternalPackages: ["postgres", "xlsx"],
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

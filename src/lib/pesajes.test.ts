@@ -1,21 +1,12 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import test from "node:test";
-import { abrirBase } from "./db.ts";
+import { basePrueba } from "./db-prueba.ts";
 import { buscarLote, insertarRecepcion } from "./lotes.ts";
 import { sufijoDeMiniLote, tokenDeSecuencia } from "./minilote.ts";
 import { abrirPesaje, aportesDelTipo, buscarMiniLote, buscarPesajePorCodigo, codigoDePesaje, codigoDelPesaje, consumirEnPesaje, existenciasDeTipos, planillaDeProducto, quitarKgDePesaje, retirosDeTag, tagsDelTipo } from "./pesajes.ts";
 import { leerConsumoQr, textoQr, textoQrMiniLote } from "./qr.ts";
 import { excelDeReceta } from "./excel-receta.ts";
 import { guardarReceta, interpretarFilasReceta, leerRecetaExcel } from "./recetas.ts";
-
-function baseTemporal() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "purolomo-pesaje-"));
-  const db = abrirBase(path.join(dir, "produccion.sqlite"));
-  return { dir, db };
-}
 
 test("acepta una receta de Alibal 1 kg entre 725 y 755 kg", () => {
   const valida = interpretarFilasReceta([
@@ -82,8 +73,8 @@ test("el excel descargado de la receta se puede volver a cargar", async () => {
   assert.deepEqual(leida.value, receta.value);
 });
 
-test("un pesaje junta dos tags del mismo MPC y rechaza lo que no está en la receta", () => {
-  const { dir, db } = baseTemporal();
+test("un pesaje junta dos tags del mismo MPC y rechaza lo que no está en la receta", async () => {
+  const db = await basePrueba();
   const receta = interpretarFilasReceta([
     ["GL", "340"],
     ["CH", "240"],
@@ -91,45 +82,45 @@ test("un pesaje junta dos tags del mismo MPC y rechaza lo que no está en la rec
   ]);
   assert.equal(receta.ok, true);
   if (!receta.ok) return;
-  guardarReceta(db, receta.value);
+  await guardarReceta(db, receta.value);
 
   assert.equal(
-    insertarRecepcion(db, { fecha: "2026-10-29", tag: "5000001", codigo: "MPCM01045", kgRecibidos: 1000 }).ok,
+    (await insertarRecepcion(db, { fecha: "2026-10-29", tag: "5000001", codigo: "MPCM01045", kgRecibidos: 1000 })).ok,
     true,
   );
   assert.equal(
-    insertarRecepcion(db, { fecha: "2026-10-29", tag: "5000002", codigo: "MPCM01045", kgRecibidos: 1000, destino: "ALIBAL 1 K" }).ok,
+    (await insertarRecepcion(db, { fecha: "2026-10-29", tag: "5000002", codigo: "MPCM01045", kgRecibidos: 1000, destino: "ALIBAL 1 K" })).ok,
     true,
   );
   assert.equal(
-    insertarRecepcion(db, { fecha: "2026-10-29", tag: "5000003", codigo: "MPCM01047", kgRecibidos: 1000, destino: "ALIBAL 1 K" }).ok,
+    (await insertarRecepcion(db, { fecha: "2026-10-29", tag: "5000003", codigo: "MPCM01047", kgRecibidos: 1000, destino: "ALIBAL 1 K" })).ok,
     true,
   );
 
-  const pesaje = abrirPesaje(db, { fecha: "2026-10-29", numero: 2, linea: "1" });
+  const pesaje = await abrirPesaje(db, { fecha: "2026-10-29", numero: 2, linea: "1" });
   assert.equal(pesaje.ok, true);
   if (!pesaje.ok) return;
 
-  const primero = consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000001", kg: 200 });
+  const primero = await consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000001", kg: 200 });
   assert.equal(primero.ok, true);
   if (!primero.ok) return;
-  const segundo = consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000002", kg: 140 });
+  const segundo = await consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000002", kg: 140 });
   assert.equal(segundo.ok, true);
   if (!segundo.ok) return;
 
-  const paleta = buscarLote(db, "5000001");
+  const paleta = await buscarLote(db, "5000001");
   assert.equal(paleta?.destino, "ALIBAL 1 K");
-  const retiros = retirosDeTag(db, "5000001");
+  const retiros = await retirosDeTag(db, "5000001");
   assert.equal(retiros[0]?.token, primero.value.token);
   assert.match(textoQr(paleta!, retiros), /Uso:ALIBAL 1 K/);
   assert.match(textoQr(paleta!, retiros), new RegExp(`Mini:${primero.value.token} 200 kg GL pesaje 2`));
   assert.match(textoQr(paleta!, retiros), /para ALIBAL 1 K/);
   assert.equal(retiros[0]?.destino, "ALIBAL 1 K");
 
-  const tags = tagsDelTipo(db, pesaje.value.id, "GL");
+  const tags = await tagsDelTipo(db, pesaje.value.id, "GL");
   assert.deepEqual(tags, ["5000001", "5000002"]);
-  assert.equal(planillaDeProducto(db, "ALIBAL 1 K").filas.length, 0);
-  const gl = aportesDelTipo(db, pesaje.value.id, "GL");
+  assert.equal((await planillaDeProducto(db, "ALIBAL 1 K")).filas.length, 0);
+  const gl = await aportesDelTipo(db, pesaje.value.id, "GL");
   assert.deepEqual(
     gl.map((aporte) => aporte.tag),
     ["5000001", "5000002"],
@@ -155,11 +146,11 @@ test("un pesaje junta dos tags del mismo MPC y rechaza lo que no está en la rec
   assert.equal(codigoDePesaje({ numero: 1, linea: "1" }, [{ tipo: "GL", token: "ML002S" }]), "1L1-GL2S");
   const corto = (token: string) => sufijoDeMiniLote(token);
   const codigo = `2L1-GL${corto(primero.value.token)}-GL${corto(segundo.value.token)}`;
-  assert.equal(codigoDelPesaje(db, pesaje.value.id), codigo);
-  assert.equal(buscarPesajePorCodigo(db, codigo)?.id, pesaje.value.id);
-  assert.equal(buscarPesajePorCodigo(db, "GLML999999-340"), null);
-  assert.equal(buscarMiniLote(db, primero.value.token.slice(2))?.token, primero.value.token);
-  const cava = existenciasDeTipos(db, ["GL"]);
+  assert.equal(await codigoDelPesaje(db, pesaje.value.id), codigo);
+  assert.equal((await buscarPesajePorCodigo(db, codigo))?.id, pesaje.value.id);
+  assert.equal(await buscarPesajePorCodigo(db, "GLML999999-340"), null);
+  assert.equal((await buscarMiniLote(db, primero.value.token.slice(2)))?.token, primero.value.token);
+  const cava = await existenciasDeTipos(db, ["GL"]);
   assert.ok(cava.some((item) => item.tag === "5000001" && item.kg === 800));
   assert.ok(cava.some((item) => item.tag === "5000002" && item.kg === 860));
   const texto = textoQrMiniLote({
@@ -176,18 +167,15 @@ test("un pesaje junta dos tags del mismo MPC y rechaza lo que no está en la rec
   assert.match(texto, /TAGS:5000001,5000002/);
   assert.equal(leerConsumoQr(texto)?.token, segundo.value.token);
 
-  const ajena = consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000003", kg: 10 });
+  const ajena = await consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000003", kg: 10 });
   assert.equal(ajena.ok, false);
 
-  const deMas = consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000001", kg: 200 });
+  const deMas = await consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000001", kg: 200 });
   assert.equal(deMas.ok, false);
 
-  const quitado = quitarKgDePesaje(db, { pesajeId: pesaje.value.id, token: primero.value.token });
+  const quitado = await quitarKgDePesaje(db, { pesajeId: pesaje.value.id, token: primero.value.token });
   assert.equal(quitado.ok, true);
-  assert.equal(buscarLote(db, "5000001")?.kgDespachados, 0);
-  assert.equal(aportesDelTipo(db, pesaje.value.id, "GL").some((aporte) => aporte.token === primero.value.token), false);
-  assert.equal(existenciasDeTipos(db, ["GL"]).find((item) => item.tag === "5000001")?.kg, 1000);
-
-  db.close();
-  fs.rmSync(dir, { recursive: true, force: true });
+  assert.equal((await buscarLote(db, "5000001"))?.kgDespachados, 0);
+  assert.equal((await aportesDelTipo(db, pesaje.value.id, "GL")).some((aporte) => aporte.token === primero.value.token), false);
+  assert.equal((await existenciasDeTipos(db, ["GL"])).find((item) => item.tag === "5000001")?.kg, 1000);
 });

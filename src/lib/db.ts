@@ -1,193 +1,114 @@
-import fs from "node:fs";
-import path from "node:path";
-import Database from "better-sqlite3";
-import { asegurarCatalogo, sembrarSiVacia } from "./seed";
+import postgres from "postgres";
 
-export type SqliteDb = Database.Database;
+export type Fila = Record<string, unknown>;
 
-const globalForDb = globalThis as unknown as { sqlite?: SqliteDb };
-
-export function rutaBaseDatos() {
-  if (process.env.SQLITE_PATH) return process.env.SQLITE_PATH;
-  const local = path.join(process.cwd(), "data", "produccion.sqlite");
-  try {
-    fs.mkdirSync(path.dirname(local), { recursive: true });
-    fs.accessSync(path.dirname(local), fs.constants.W_OK);
-    return local;
-  } catch {
-    return path.join("/tmp", "produccion.sqlite");
-  }
+/**
+ * Acceso a la base de datos (Postgres en Supabase).
+ * Las consultas se escriben con `?` como en la versión SQLite; se convierten a $1, $2...
+ */
+export interface Db {
+  get<T = Fila>(sql: string, ...params: unknown[]): Promise<T | undefined>;
+  all<T = Fila>(sql: string, ...params: unknown[]): Promise<T[]>;
+  /** Ejecuta INSERT/UPDATE/DELETE y devuelve cuántas filas cambiaron. */
+  run(sql: string, ...params: unknown[]): Promise<number>;
+  exec(sql: string): Promise<void>;
+  /** Ejecuta `fn` dentro de una transacción. Dentro de otra transacción reutiliza la misma. */
+  transaction<T>(fn: (tx: Db) => Promise<T>): Promise<T>;
 }
 
-export function abrirBase(archivo: string) {
-  fs.mkdirSync(path.dirname(archivo), { recursive: true });
-  const db = new Database(archivo);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-  db.pragma("busy_timeout = 5000");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS productos (
-      codigo TEXT PRIMARY KEY,
-      nombre TEXT NOT NULL,
-      tipo TEXT NOT NULL,
-      descripcion TEXT NOT NULL
-    );
+/** Cambia los `?` fuera de comillas simples por $1, $2... */
+export function aPostgres(sql: string) {
+  let salida = "";
+  let n = 0;
+  let enTexto = false;
+  for (const caracter of sql) {
+    if (caracter === "'") enTexto = !enTexto;
+    if (caracter === "?" && !enTexto) {
+      n += 1;
+      salida += `$${n}`;
+    } else {
+      salida += caracter;
+    }
+  }
+  return salida;
+}
 
-    CREATE TABLE IF NOT EXISTS lotes (
-      tag TEXT PRIMARY KEY,
-      fecha TEXT NOT NULL,
-      semana TEXT NOT NULL,
-      codigo TEXT NOT NULL,
-      producto TEXT NOT NULL,
-      kg_recibidos REAL NOT NULL DEFAULT 0 CHECK (kg_recibidos >= 0),
-      kg_despachados REAL NOT NULL DEFAULT 0 CHECK (kg_despachados >= 0),
-      kg_consumidos REAL NOT NULL DEFAULT 0 CHECK (kg_consumidos >= 0),
-      estado TEXT NOT NULL,
-      observaciones TEXT NOT NULL DEFAULT '',
-      destino TEXT NOT NULL DEFAULT '',
-      creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
+export { arregloPg } from "./arreglo-pg";
 
-    CREATE TABLE IF NOT EXISTS movimientos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tag TEXT NOT NULL,
-      tipo TEXT NOT NULL CHECK (tipo IN ('recepcion', 'despacho', 'consumo', 'devolucion', 'transferencia')),
-      fecha TEXT NOT NULL,
-      semana TEXT NOT NULL,
-      kg REAL NOT NULL CHECK (kg >= 0),
-      estado TEXT NOT NULL,
-      nota TEXT NOT NULL DEFAULT '',
-      destino TEXT NOT NULL DEFAULT '',
-      linea TEXT NOT NULL DEFAULT '',
-      creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
+/** Lo que necesita `crearDb` de una conexión: consultas con parámetros y SQL de varias sentencias. */
+export type Conexion = {
+  consultar: (texto: string, params: unknown[]) => Promise<{ filas: Fila[]; cambios: number }>;
+  ejecutar: (texto: string) => Promise<void>;
+};
 
-    CREATE INDEX IF NOT EXISTS idx_lotes_fecha ON lotes (fecha DESC, tag DESC);
-    CREATE INDEX IF NOT EXISTS idx_lotes_estado ON lotes (estado, fecha DESC);
-    CREATE INDEX IF NOT EXISTS idx_lotes_codigo ON lotes (codigo);
-    CREATE INDEX IF NOT EXISTS idx_mov_tag ON movimientos (tag, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_mov_tipo ON movimientos (tipo, fecha DESC);
-  `);
-  asegurarEsquema(db);
-  sembrarSiVacia(db);
+export function crearDb(
+  conexion: Conexion,
+  transaccion: (fn: (conexionTx: Conexion) => Promise<unknown>) => Promise<unknown>,
+  dentroDeTransaccion = false,
+): Db {
+  const db: Db = {
+    async get<T>(sql: string, ...params: unknown[]) {
+      const { filas } = await conexion.consultar(aPostgres(sql), params);
+      return filas[0] as T | undefined;
+    },
+    async all<T>(sql: string, ...params: unknown[]) {
+      const { filas } = await conexion.consultar(aPostgres(sql), params);
+      return filas as T[];
+    },
+    async run(sql: string, ...params: unknown[]) {
+      const { cambios } = await conexion.consultar(aPostgres(sql), params);
+      return cambios;
+    },
+    async exec(sql: string) {
+      await conexion.ejecutar(sql);
+    },
+    async transaction<T>(fn: (tx: Db) => Promise<T>) {
+      if (dentroDeTransaccion) return fn(db);
+      return (await transaccion((conexionTx) => fn(crearDb(conexionTx, transaccion, true)))) as T;
+    },
+  };
   return db;
 }
 
-function asegurarEsquema(db: SqliteDb) {
-  asegurarColumna(db, "lotes", "destino", "TEXT NOT NULL DEFAULT ''");
-  asegurarColumna(db, "movimientos", "destino", "TEXT NOT NULL DEFAULT ''");
-  asegurarColumna(db, "movimientos", "linea", "TEXT NOT NULL DEFAULT ''");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS recetas (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      destino TEXT NOT NULL,
-      linea TEXT NOT NULL DEFAULT '1',
-      objetivo_kg REAL NOT NULL,
-      tolerancia_kg REAL NOT NULL,
-      creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
+type ClientePostgres = ReturnType<typeof postgres>;
 
-    CREATE TABLE IF NOT EXISTS receta_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      receta_id INTEGER NOT NULL,
-      tipo TEXT NOT NULL,
-      kg REAL NOT NULL CHECK (kg > 0),
-      UNIQUE (receta_id, tipo)
-    );
-
-    CREATE TABLE IF NOT EXISTS pesajes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      numero INTEGER NOT NULL,
-      fecha TEXT NOT NULL,
-      destino TEXT NOT NULL,
-      linea TEXT NOT NULL,
-      receta_id INTEGER NOT NULL,
-      creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-      UNIQUE (fecha, destino, linea, numero)
-    );
-
-    CREATE TABLE IF NOT EXISTS minilotes (
-      token TEXT PRIMARY KEY,
-      tag TEXT NOT NULL,
-      pesaje_id INTEGER NOT NULL,
-      tipo TEXT NOT NULL,
-      kg REAL NOT NULL CHECK (kg > 0),
-      destino TEXT NOT NULL,
-      linea TEXT NOT NULL,
-      creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_mini_pesaje ON minilotes (pesaje_id, tipo, creado_en);
-
-    CREATE TABLE IF NOT EXISTS usuarios (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      nombre TEXT NOT NULL,
-      usuario TEXT NOT NULL UNIQUE COLLATE NOCASE,
-      clave TEXT NOT NULL,
-      rango TEXT NOT NULL CHECK (rango IN ('administrador', 'consulta', 'recepcionista', 'pesador')),
-      activo INTEGER NOT NULL DEFAULT 1,
-      creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
-  `);
-  asegurarColumna(db, "recetas", "linea", "TEXT NOT NULL DEFAULT '1'");
-  asegurarColumna(db, "receta_items", "tolerancia_kg", "REAL NOT NULL DEFAULT 15");
-  asegurarColumna(db, "recetas", "minimo_kg", "REAL");
-  asegurarColumna(db, "recetas", "maximo_kg", "REAL");
-  asegurarColumna(db, "receta_items", "minimo_kg", "REAL");
-  asegurarColumna(db, "receta_items", "maximo_kg", "REAL");
-  asegurarColumna(db, "pesajes", "observaciones", "TEXT NOT NULL DEFAULT ''");
-  asegurarColumna(db, "pesajes", "finalizado", "INTEGER NOT NULL DEFAULT 0");
-  asegurarColumna(db, "pesajes", "registrado_en", "TEXT NOT NULL DEFAULT ''");
-  ampliarRangos(db);
-  db.prepare("UPDATE lotes SET estado = 'RECIBIDO' WHERE estado = 'PENDIENTE POR TRANSFERIR'").run();
-  db.prepare("UPDATE movimientos SET estado = 'RECIBIDO' WHERE estado = 'PENDIENTE POR TRANSFERIR'").run();
-}
-
-function ampliarRangos(db: SqliteDb) {
-  const def = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'usuarios'").get() as
-    | { sql: string }
-    | undefined;
-  if (!def || def.sql.includes("recepcionista")) return;
-  db.pragma("foreign_keys = OFF");
-  const migrar = db.transaction(() => {
-    db.exec(`
-      CREATE TABLE usuarios_nueva (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre TEXT NOT NULL,
-        usuario TEXT NOT NULL UNIQUE COLLATE NOCASE,
-        clave TEXT NOT NULL,
-        rango TEXT NOT NULL CHECK (rango IN ('administrador', 'consulta', 'recepcionista', 'pesador')),
-        activo INTEGER NOT NULL DEFAULT 1,
-        creado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-      );
-      INSERT INTO usuarios_nueva (id, nombre, usuario, clave, rango, activo, creado_en)
-      SELECT id, nombre, usuario, clave, rango, activo, creado_en FROM usuarios;
-      DROP TABLE usuarios;
-      ALTER TABLE usuarios_nueva RENAME TO usuarios;
-    `);
+function dbDesdePostgres(cliente: ClientePostgres): Db {
+  const sobre = (sql: ClientePostgres | postgres.TransactionSql): Conexion => ({
+    async consultar(texto, params) {
+      const resultado = await sql.unsafe(texto, params as postgres.ParameterOrJSON<never>[]);
+      return { filas: [...resultado] as Fila[], cambios: resultado.count ?? 0 };
+    },
+    async ejecutar(texto) {
+      // Protocolo simple: admite varias sentencias seguidas (el esquema completo, por ejemplo).
+      await sql.unsafe(texto).simple();
+    },
   });
-  migrar();
-  db.pragma("foreign_keys = ON");
+  return crearDb(sobre(cliente), (fn) => cliente.begin((tx) => fn(sobre(tx))) as Promise<unknown>);
 }
 
-function asegurarColumna(
-  db: SqliteDb,
-  tabla: "lotes" | "movimientos" | "recetas" | "receta_items" | "pesajes",
-  columna: string,
-  definicion: string,
-) {
-  const columnas = db.prepare(`PRAGMA table_info(${tabla})`).all() as { name: string }[];
-  if (!columnas.some((fila) => fila.name === columna)) {
-    db.exec(`ALTER TABLE ${tabla} ADD COLUMN ${columna} ${definicion}`);
+const globalParaDb = globalThis as unknown as { purolomoDb?: Db };
+
+export function urlBaseDatos() {
+  const url = process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? "";
+  if (!url) {
+    throw new Error(
+      "Falta DATABASE_URL: la cadena de conexión de Supabase (botón Connect > Transaction pooler).",
+    );
   }
+  return url;
 }
 
-export function getDb() {
-  if (!globalForDb.sqlite) {
-    globalForDb.sqlite = abrirBase(rutaBaseDatos());
-  } else {
-    asegurarEsquema(globalForDb.sqlite);
-    asegurarCatalogo(globalForDb.sqlite);
+export function getDb(): Db {
+  if (!globalParaDb.purolomoDb) {
+    const cliente = postgres(urlBaseDatos(), {
+      // El pooler de Supabase en modo transacción no admite sentencias preparadas.
+      prepare: false,
+      max: Number(process.env.DB_MAX_CONEXIONES ?? 5),
+      idle_timeout: 20,
+      connect_timeout: 15,
+      ssl: /localhost|127\.0\.0\.1/.test(urlBaseDatos()) ? false : "require",
+    });
+    globalParaDb.purolomoDb = dbDesdePostgres(cliente);
   }
-  return globalForDb.sqlite;
+  return globalParaDb.purolomoDb;
 }

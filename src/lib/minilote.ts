@@ -1,4 +1,4 @@
-import type { SqliteDb } from "./db";
+import type { Db } from "./db";
 
 const ALFABETO = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -43,18 +43,12 @@ export function normalizarToken(valor: string) {
   return texto;
 }
 
-export function siguienteToken(db: SqliteDb) {
-  db.exec("CREATE TABLE IF NOT EXISTS app_meta (clave TEXT PRIMARY KEY, valor TEXT NOT NULL)");
-  const guardado = db.prepare("SELECT valor FROM app_meta WHERE clave = 'minilote_seq'").get() as
-    | { valor: string }
-    | undefined;
-  let seq = Number(guardado?.valor ?? 0);
-  if (!Number.isFinite(seq) || seq < 0) seq = 0;
-  const filas = db.prepare("SELECT token FROM minilotes").all() as { token: string }[];
-  for (const fila of filas) seq = Math.max(seq, secuenciaDeToken(fila.token));
-  const siguiente = seq + 1;
-  db.prepare(
-    "INSERT INTO app_meta (clave, valor) VALUES ('minilote_seq', ?) ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor",
-  ).run(String(siguiente));
-  return tokenDeSecuencia(siguiente);
+/** Siguiente código de mini lote. El contador sube en una sola sentencia, así dos pesajes a la vez no repiten código. */
+export async function siguienteToken(db: Db) {
+  const fila = await db.get<{ valor: string }>(
+    `INSERT INTO app_meta (clave, valor) VALUES ('minilote_seq', '1')
+     ON CONFLICT (clave) DO UPDATE SET valor = (app_meta.valor::integer + 1)::text
+     RETURNING valor`,
+  );
+  return tokenDeSecuencia(Number(fila?.valor ?? 1));
 }

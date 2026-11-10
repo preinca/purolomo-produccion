@@ -1,6 +1,6 @@
 # Purolomo · Materia prima
 
-Panel de recepción de materia prima cárnica para el almacén de producción de Cagua. Cada paleta (TAG) se guarda en **SQLite** y la aplicación genera su **código QR**.
+Panel de recepción de materia prima cárnica para el almacén de producción de Cagua. Cada paleta (TAG) se guarda en **Supabase (Postgres)** y la aplicación genera su **código QR**. La aplicación se publica en **Vercel**.
 
 ## Qué registra cada QR
 
@@ -8,29 +8,32 @@ Fecha, semana, TAG, tipo de producto, código, kg recibidos, kg despachados, kg 
 
 La nomenclatura (Z, C, DD, CH, GL, GP, BF, RR, R#2, etc.) es la del control de recepción MPC. El catálogo de códigos sale del CDM de octubre 2026.
 
-## Cómo correrlo en tu laptop
+## Variables de entorno
 
-SQLite **no es un programa que haya que instalar aparte** para que el panel funcione. No hay usuario, contraseña ni puerto de base de datos. Node 22 ya trae SQLite; la aplicación guarda todo en un archivo de tu disco:
+Copia `.env.example` a `.env.local` y rellena:
 
-`data/produccion.sqlite`
-
-Ese archivo es la base. Lo que registres en el panel (entradas, salidas, consumo, estados, QR) queda ahí y se lee de ahí.
-
-### 1. Instalar Node.js 20 o 22
-
-Descarga **Node.js 22 LTS** (o 20 LTS) desde [https://nodejs.org](https://nodejs.org) e instálalo. Cierra y abre la terminal (o PowerShell) y comprueba:
+- `DATABASE_URL`: cadena de conexión de Supabase. En Supabase, botón **Connect** (arriba) → **Transaction pooler** (puerto 6543). Cambia `[YOUR-PASSWORD]` por la contraseña de la base de datos.
+- `SESION_SECRETO`: texto largo y aleatorio para firmar las sesiones. Genéralo con:
 
 ```bash
-node -v
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Tiene que salir `v20.…` o `v22.…`. La base usa el paquete **better-sqlite3** (funciona en Windows y con `npm run build`); no hace falta instalar SQLite por separado.
+En Vercel pon las mismas dos variables en **Settings → Environment Variables**.
 
-En Windows, si `npm install` falla compilando better-sqlite3, instala [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) con la carga **“Desarrollo de escritorio con C++”** y vuelve a ejecutar `npm install`.
+## Preparar la base de datos de Supabase
 
-### 2. Copiar el proyecto y arrancarlo
+```bash
+npm run db:migrar
+```
 
-En una carpeta de tu laptop (por ejemplo Documentos):
+Crea las tablas (`supabase/esquema.sql`) y copia desde la base SQLite antigua (`data/produccion.sqlite`, si existe) solo los usuarios, el catálogo y las recetas. Lotes, movimientos, pesajes y mini lotes empiezan vacíos. Si Supabase ya tiene datos de operación, no copia nada.
+
+Si no hay base SQLite antigua, la primera visita a `/entrar` pide crear el administrador.
+
+## Correrlo en tu laptop
+
+Hace falta Node.js 22 LTS ([https://nodejs.org](https://nodejs.org)).
 
 ```bash
 git clone https://github.com/preinca/purolomo-produccion.git
@@ -39,86 +42,24 @@ npm install
 npm run dev
 ```
 
-Abre [http://127.0.0.1:47231](http://127.0.0.1:47231). La primera visita crea `data/produccion.sqlite` con el catálogo MPC (códigos Z, C, DD, etc.). Los lotes los cargas tú en **Registrar entradas**. El archivo `.sqlite` no se sube a git: se queda en tu computadora.
-
-Para ver la ruta exacta:
-
-```bash
-npm run db:info
-```
-
-### 3. (Opcional) Programa para mirar el archivo
-
-Esto **no** lo usa la aplicación. Solo sirve si quieres abrir las tablas a mano:
-
-- **Windows:** [DB Browser for SQLite](https://sqlitebrowser.org/) — Archivo → Abrir → `data/produccion.sqlite`
-- **Windows (línea de comandos):** `winget install SQLite.SQLite`
-- **macOS:** `brew install sqlite`
-- **Linux (Debian/Ubuntu):** `sudo apt install sqlite3`
-
-```bash
-sqlite3 data/produccion.sqlite
-.tables
-SELECT tag, producto, kg_recibidos, estado FROM lotes;
-```
-
-Cierra DB Browser o `sqlite3` antes de volver a usar el panel: SQLite es un archivo y no conviene que dos programas lo escriban a la vez.
-
-### Vaciar y volver a empezar
-
-```bash
-npm run reset-db
-```
-
-Reinicia `npm run dev`. El catálogo de productos se crea solo.
-
-Para cargar otra vez la demo masiva del CDM de octubre 2026:
-
-```bash
-npm run reset-db
-```
-
-En Windows PowerShell:
-
-```powershell
-$env:SEED_LOTES_CDM="1"; npm run dev
-```
-
-En macOS / Linux:
-
-```bash
-SEED_LOTES_CDM=1 npm run dev
-```
+Abre [http://127.0.0.1:47231](http://127.0.0.1:47231). En local también se usa la base de Supabase de `DATABASE_URL`: lo que registres en local aparece en Vercel.
 
 ```bash
 npm test
 npm run lint
 ```
 
-## SQLite
+Las pruebas usan un Postgres en memoria (PGlite) con el mismo esquema; no tocan Supabase.
 
-SQLite va embebido con **better-sqlite3**. No hay servidor de base de datos ni usuario/contraseña.
+## Base de datos
 
-- `src/lib/db.ts` abre el archivo, crea las tablas y siembra el catálogo.
-- `src/lib/lotes.ts` valida e inserta recepciones, despachos y consumos.
-- `src/app/actions.ts` conecta el formulario con esas funciones.
+- `supabase/esquema.sql` — tablas e índices. Las tablas tienen RLS activado sin políticas: la API pública de Supabase no puede leerlas; la aplicación entra con la conexión directa.
+- `src/lib/db.ts` — conexión a Postgres. Las consultas se escriben con `?` y se convierten a `$1, $2…`.
+- `src/lib/lotes.ts` — recepciones, salidas y consumos. Las salidas bloquean el TAG mientras descuentan kilos, para que dos personas no se pisen.
+- `src/lib/pesajes.ts` — pesajes, mini lotes y códigos de pesaje.
+- `src/app/actions.ts` — conecta los formularios con esas funciones.
 
-Para guardar el archivo en otra carpeta (por ejemplo un disco compartido de planta), copia `.env.example` a `.env.local` y define `SQLITE_PATH`, o:
-
-**Windows PowerShell**
-
-```powershell
-$env:SQLITE_PATH="C:\Users\TuUsuario\Documents\purolomo\produccion.sqlite"
-npm run dev
-```
-
-**macOS / Linux**
-
-```bash
-SQLITE_PATH=/home/tu-usuario/Documentos/purolomo/produccion.sqlite npm run dev
-```
-
-En Vercel el disco del proyecto es de solo lectura; ahí la base cae en `/tmp` y no persiste entre reinicios. **Para producción en planta usa este panel en la laptop (o un PC de almacén) con `npm run dev` o `npm run build` + `npm start`.** El archivo `data/produccion.sqlite` es el almacén real.
+Para mirar o exportar los datos a mano: Supabase → **Table Editor**.
 
 ## Tablas
 
@@ -127,3 +68,9 @@ En Vercel el disco del proyecto es de solo lectura; ahí la base cae en `/tmp` y
 `movimientos` — recepción, transferencia, despacho, consumo o devolución.
 
 `productos` — códigos MPC (`MPCM01041` = CDM SP Z, pollo tipo pequeño, etc.).
+
+`recetas` y `receta_items` — fórmula de Alibal por línea.
+
+`pesajes` y `minilotes` — cada pesaje y los retiros de materia prima que lo forman.
+
+`usuarios` — acceso y rango (administrador, recepcionista, pesador, consulta).

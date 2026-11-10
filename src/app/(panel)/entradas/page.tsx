@@ -36,8 +36,8 @@ async function Entradas({
   const parametros = await searchParams;
   const pedido = (Array.isArray(parametros.etiqueta) ? parametros.etiqueta[0] : parametros.etiqueta ?? "").trim();
   const db = getDb();
-  const etiqueta = /^\d{4,8}$/.test(pedido) ? buscarLote(db, pedido) : null;
-  const recientes = listarLotes(db, { limite: 12 });
+  const etiqueta = /^\d{4,8}$/.test(pedido) ? await buscarLote(db, pedido) : null;
+  const recientes = await listarLotes(db, { limite: 12 });
 
   return (
     <div className="grid gap-8">
@@ -75,7 +75,7 @@ async function Entradas({
           <EntradaForm
             hoy={fechaHoy()}
             semanaSugerida={semanaDe(fechaHoy()).replace(/\D/g, "") || "45"}
-            tagSugerido={siguienteTag(db)}
+            tagSugerido={await siguienteTag(db)}
             productos={PRODUCTOS_MPC}
           />
         </CardContent>

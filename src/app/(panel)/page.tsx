@@ -23,8 +23,8 @@ export default function Page() {
 async function Dashboard() {
   await connection();
   const db = getDb();
-  const resumen = resumir(db);
-  const lotes = listarLotes(db, { limite: 12 });
+  const resumen = await resumir(db);
+  const lotes = await listarLotes(db, { limite: 12 });
 
   return (
     <div className="grid gap-8">

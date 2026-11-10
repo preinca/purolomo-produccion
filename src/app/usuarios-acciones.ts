@@ -24,7 +24,7 @@ function destino(valor: string) {
 export async function entrar(_estado: EstadoAcceso, formData: FormData): Promise<EstadoAcceso> {
   const usuario = String(formData.get("usuario") ?? "");
   const clave = String(formData.get("clave") ?? "");
-  const cuenta = autenticar(getDb(), usuario, clave);
+  const cuenta = await autenticar(getDb(), usuario, clave);
   if (!cuenta) return { error: "Usuario o clave incorrectos." };
   await guardarSesion(cuenta);
   redirect(destino(String(formData.get("siguiente") ?? "")));
@@ -35,7 +35,7 @@ export async function crearPrimerAdministrador(
   formData: FormData,
 ): Promise<EstadoAcceso> {
   const db = getDb();
-  if (contarUsuarios(db) > 0) return { error: "Ya existe un administrador. Inicia sesión." };
+  if (await contarUsuarios(db) > 0) return { error: "Ya existe un administrador. Inicia sesión." };
   const clave = String(formData.get("clave") ?? "");
   if (clave !== String(formData.get("repetir") ?? "")) return { error: "Las claves no coinciden." };
   const validado = validarCuenta({
@@ -45,9 +45,9 @@ export async function crearPrimerAdministrador(
     rango: "administrador",
   });
   if (!validado.ok) return { error: validado.error };
-  const creado = crearUsuario(db, validado.value);
+  const creado = await crearUsuario(db, validado.value);
   if (!creado.ok) return { error: creado.error };
-  const cuenta = autenticar(db, validado.value.usuario, clave);
+  const cuenta = await autenticar(db, validado.value.usuario, clave);
   if (!cuenta) return { error: "No se pudo abrir la sesión." };
   await guardarSesion(cuenta);
   redirect("/");
@@ -65,7 +65,7 @@ export async function crearUsuarioFormulario(
     rango: String(formData.get("rango") ?? ""),
   });
   if (!validado.ok) return { error: validado.error };
-  const creado = crearUsuario(getDb(), validado.value);
+  const creado = await crearUsuario(getDb(), validado.value);
   if (!creado.ok) return { error: creado.error };
   revalidatePath("/usuarios");
   return {};
@@ -74,7 +74,7 @@ export async function crearUsuarioFormulario(
 export async function alternarUsuario(formData: FormData) {
   const sesion = await exigirAdmin();
   const id = Number(formData.get("id"));
-  const resultado = alternarActivo(getDb(), id, sesion);
+  const resultado = await alternarActivo(getDb(), id, sesion);
   if (!resultado.ok) redirect(`/usuarios?error=${encodeURIComponent(resultado.error)}`);
   redirect("/usuarios");
 }

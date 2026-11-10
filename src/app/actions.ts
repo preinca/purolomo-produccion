@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getDb, type SqliteDb } from "@/lib/db";
+import { getDb, type Db } from "@/lib/db";
 import { fechaHoy, fechaValida, formatoKg } from "@/lib/formato";
 import {
   buscarLote,
@@ -56,8 +56,8 @@ export type ConsumoLeido = {
   tags: string;
 };
 
-function rutaConsumo(pesajeId: number, extra = "") {
-  const destino = buscarPesaje(getDb(), pesajeId)?.destino ?? "ALIBAL 1 K";
+async function rutaConsumo(pesajeId: number, extra = "") {
+  const destino = (await buscarPesaje(getDb(), pesajeId))?.destino ?? "ALIBAL 1 K";
   const base = `/salidas?modo=consumo&producto=${encodeURIComponent(destino)}&pesaje=${pesajeId}`;
   return extra ? `${base}&${extra}` : base;
 }
@@ -85,7 +85,7 @@ function refrescar() {
   revalidatePath("/historial/salidas");
 }
 
-function armarLoteLeido(db: SqliteDb, lote: Lote, tipoQr = ""): LoteLeido {
+async function armarLoteLeido(db: Db, lote: Lote, tipoQr = ""): Promise<LoteLeido> {
   const catalogo = productoPorCodigo(lote.codigo);
   return {
     tag: lote.tag,
@@ -102,7 +102,7 @@ function armarLoteLeido(db: SqliteDb, lote: Lote, tipoQr = ""): LoteLeido {
     estado: lote.estado,
     destino: lote.destino,
     observaciones: lote.observaciones,
-    minilotes: retirosDeTag(db, lote.tag),
+    minilotes: await retirosDeTag(db, lote.tag),
   };
 }
 
@@ -113,9 +113,9 @@ export async function loteActualDesdeTag(
   const limpio = tag.trim();
   if (!/^\d{4,8}$/.test(limpio)) return { ok: false, error: "Escribe el número de TAG." };
   const db = getDb();
-  const lote = buscarLote(db, limpio);
+  const lote = await buscarLote(db, limpio);
   if (!lote) return { ok: false, error: `No hay un lote con el TAG ${limpio}.` };
-  return { ok: true, lote: armarLoteLeido(db, lote) };
+  return { ok: true, lote: await armarLoteLeido(db, lote) };
 }
 
 export async function loteActualDesdeQr(
@@ -125,9 +125,9 @@ export async function loteActualDesdeQr(
   const consumoQr = leerConsumoQr(textoQr);
   if (consumoQr) {
     const db = getDb();
-    const mini = buscarMiniLote(db, consumoQr.token);
+    const mini = await buscarMiniLote(db, consumoQr.token);
     if (!mini) return { ok: false, error: `No hay un consumo con el token ${consumoQr.token}.` };
-    const tags = tagsDelTipo(db, mini.pesajeId, mini.tipo);
+    const tags = await tagsDelTipo(db, mini.pesajeId, mini.tipo);
     return {
       ok: true,
       consumo: {
@@ -145,9 +145,9 @@ export async function loteActualDesdeQr(
   const lectura = leerTextoQr(textoQr);
   if (!lectura) return { ok: false, error: "Ese QR no es de una paleta de este almacén." };
   const db = getDb();
-  const lote = buscarLote(db, lectura.tag);
+  const lote = await buscarLote(db, lectura.tag);
   if (!lote) return { ok: false, error: `No hay un lote con el TAG ${lectura.tag}.` };
-  return { ok: true, lote: armarLoteLeido(db, lote, lectura.tipo) };
+  return { ok: true, lote: await armarLoteLeido(db, lote, lectura.tipo) };
 }
 
 export async function cargarRecetaAlibal(
@@ -164,7 +164,7 @@ export async function cargarRecetaAlibal(
   const leida = leerRecetaExcel(Buffer.from(await archivo.arrayBuffer()), linea);
   if (!leida.ok) return { error: leida.error };
   const db = getDb();
-  const faltantes = faltantesDeReceta(db, leida.value.items);
+  const faltantes = await faltantesDeReceta(db, leida.value.items);
   if (faltantes.length > 0) {
     const detalle = faltantes
       .map((item) =>
@@ -177,7 +177,7 @@ export async function cargarRecetaAlibal(
       error: `No se cargó el Excel. No hay stock suficiente para esta fórmula de Alibal. ${detalle}.`,
     };
   }
-  guardarReceta(db, leida.value, linea);
+  await guardarReceta(db, leida.value, linea);
   refrescar();
   redirect("/receta");
 }
@@ -186,7 +186,7 @@ export async function numeroSiguientePesaje(fecha: string) {
   if (!(await leerSesion())) return 1;
   const dia = fecha.trim();
   if (!fechaValida(dia)) return 1;
-  return siguienteNumero(getDb(), dia);
+  return await siguienteNumero(getDb(), dia);
 }
 
 export async function abrirPesajeFormulario(
@@ -196,14 +196,14 @@ export async function abrirPesajeFormulario(
   await exigirRango(["administrador", "pesador"]);
   const destino = texto(formData, "destino").trim();
   if (!destinoValido(destino)) return { error: "Elige el producto que se va a elaborar." };
-  const resultado = abrirPesaje(getDb(), {
+  const resultado = await abrirPesaje(getDb(), {
     fecha: texto(formData, "fecha"),
     linea: texto(formData, "linea"),
     destino,
   });
   if (!resultado.ok) return { error: resultado.error };
   refrescar();
-  redirect(rutaConsumo(resultado.value.id));
+  redirect(await rutaConsumo(resultado.value.id));
 }
 
 export async function trasladarLogisticaFormulario(
@@ -212,7 +212,7 @@ export async function trasladarLogisticaFormulario(
 ): Promise<EstadoFormulario> {
   await exigirAdmin();
   const tag = texto(formData, "tag").trim();
-  const resultado = trasladarALogistica(getDb(), {
+  const resultado = await trasladarALogistica(getDb(), {
     tag,
     fecha: fechaHoy(),
     observacion: texto(formData, "observacion"),
@@ -230,10 +230,10 @@ export async function finalizarPesajeFormulario(
 ): Promise<EstadoFormulario> {
   await exigirRango(["administrador", "pesador"]);
   const pesajeId = Number(texto(formData, "pesaje_id"));
-  const resultado = finalizarPesaje(getDb(), pesajeId);
+  const resultado = await finalizarPesaje(getDb(), pesajeId);
   if (!resultado.ok) return { error: resultado.error };
   refrescar();
-  redirect(rutaConsumo(pesajeId, "cerrado=1"));
+  redirect(await rutaConsumo(pesajeId, "cerrado=1"));
 }
 
 export async function consumirPesajeFormulario(
@@ -243,7 +243,7 @@ export async function consumirPesajeFormulario(
   await exigirRango(["administrador", "pesador"]);
   const pesajeId = Number(texto(formData, "pesaje_id"));
   const tag = texto(formData, "tag").trim();
-  const resultado = consumirEnPesaje(getDb(), {
+  const resultado = await consumirEnPesaje(getDb(), {
     pesajeId,
     tag,
     kg: kilos(formData, "kg"),
@@ -253,7 +253,7 @@ export async function consumirPesajeFormulario(
   refrescar();
   revalidatePath(`/lote/${tag}`);
   revalidatePath(`/qr/imagen/${tag}`);
-  redirect(rutaConsumo(pesajeId, `token=${resultado.value.token}`));
+  redirect(await rutaConsumo(pesajeId, `token=${resultado.value.token}`));
 }
 
 export async function quitarKgPesajeFormulario(
@@ -262,12 +262,12 @@ export async function quitarKgPesajeFormulario(
 ): Promise<EstadoFormulario> {
   await exigirRango(["administrador", "pesador"]);
   const pesajeId = Number(texto(formData, "pesaje_id"));
-  const resultado = quitarKgDePesaje(getDb(), { pesajeId, token: texto(formData, "token") });
+  const resultado = await quitarKgDePesaje(getDb(), { pesajeId, token: texto(formData, "token") });
   if (!resultado.ok) return { error: resultado.error };
   refrescar();
   revalidatePath(`/lote/${resultado.value.tag}`);
   revalidatePath(`/qr/imagen/${resultado.value.tag}`);
-  redirect(rutaConsumo(pesajeId));
+  redirect(await rutaConsumo(pesajeId));
 }
 
 export async function guardarObservacionTagFormulario(
@@ -276,7 +276,7 @@ export async function guardarObservacionTagFormulario(
 ): Promise<EstadoFormulario> {
   await exigirRango(["administrador", "recepcionista"]);
   const tag = texto(formData, "tag").trim();
-  const resultado = guardarObservacionLote(getDb(), tag, texto(formData, "observacion"));
+  const resultado = await guardarObservacionLote(getDb(), tag, texto(formData, "observacion"));
   if (!resultado.ok) return { error: resultado.error };
   refrescar();
   revalidatePath(`/lote/${tag}`);
@@ -290,7 +290,7 @@ export async function guardarObservacionPesajeFormulario(
 ): Promise<EstadoFormulario> {
   await exigirRango(["administrador", "pesador"]);
   const pesajeId = Number(texto(formData, "pesaje_id"));
-  const resultado = guardarObservacionPesaje(getDb(), pesajeId, texto(formData, "observacion"));
+  const resultado = await guardarObservacionPesaje(getDb(), pesajeId, texto(formData, "observacion"));
   if (!resultado.ok) return { error: resultado.error };
   refrescar();
   revalidatePath(`/qr/pesaje/${pesajeId}`);
@@ -311,7 +311,7 @@ export async function crearRecepcion(
   });
   if (!validado.ok) return { error: validado.error };
 
-  const resultado = insertarRecepcion(getDb(), {
+  const resultado = await insertarRecepcion(getDb(), {
     ...validado.value,
     observaciones: texto(formData, "observaciones").trim().slice(0, 500),
   });
@@ -323,7 +323,7 @@ export async function crearRecepcion(
 export async function validarTransferencia(formData: FormData) {
   await exigirAdmin();
   const tag = texto(formData, "tag");
-  const resultado = transferirLote(getDb(), tag, fechaHoy());
+  const resultado = await transferirLote(getDb(), tag, fechaHoy());
   if (!resultado.ok) return;
   refrescar();
   revalidatePath(`/lote/${tag}`);
@@ -344,7 +344,7 @@ export async function crearDespacho(
     return { error: "Elige el producto y la presentación donde se va a usar." };
   }
   if (!lineaPorId(linea)) return { error: "Elige si se usa en la línea 1 o en la línea 2." };
-  const resultado = registrarDespacho(getDb(), {
+  const resultado = await registrarDespacho(getDb(), {
     tag,
     fecha,
     kg,
@@ -367,7 +367,7 @@ export async function eliminarLoteFormulario(
   if (texto(formData, "confirmar") !== "si") {
     return { error: "Confirma que quieres eliminar el lote." };
   }
-  const resultado = eliminarLote(getDb(), tag);
+  const resultado = await eliminarLote(getDb(), tag);
   if (!resultado.ok) return { error: resultado.error };
   refrescar();
   revalidatePath(`/lote/${tag}`);
@@ -383,7 +383,7 @@ export async function crearConsumo(
   const fecha = texto(formData, "fecha");
   const kg = kilos(formData, "kg");
   if (!fechaValida(fecha)) return { error: "Indica una fecha válida." };
-  const resultado = registrarConsumo(getDb(), {
+  const resultado = await registrarConsumo(getDb(), {
     tag,
     fecha,
     kg,

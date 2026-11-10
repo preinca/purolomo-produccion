@@ -42,12 +42,12 @@ async function Salidas({
   const pedidoProducto = leer(parametros.producto);
   const producto = pedidoProducto === ALIBAL_1K.destino || pesajeId || token ? ALIBAL_1K.destino : "";
   const db = getDb();
-  const cargadas = recetasCargadas(db).filter((receta) => receta.destino === producto);
-  const enCurso = pesajeEnCurso(db, producto);
-  const encontrado = Number.isInteger(pesajeId) ? buscarPesaje(db, pesajeId) : null;
+  const cargadas = (await recetasCargadas(db)).filter((receta) => receta.destino === producto);
+  const enCurso = await pesajeEnCurso(db, producto);
+  const encontrado = Number.isInteger(pesajeId) ? await buscarPesaje(db, pesajeId) : null;
   const pesaje = encontrado && encontrado.destino === producto ? encontrado : enCurso;
-  const progreso = pesaje ? progresoPesaje(db, pesaje) : null;
-  const minilotes = pesaje ? listarMiniLotes(db, pesaje.id) : [];
+  const progreso = pesaje ? await progresoPesaje(db, pesaje) : null;
+  const minilotes = pesaje ? await listarMiniLotes(db, pesaje.id) : [];
 
   return (
     <div className="grid gap-8">
@@ -99,8 +99,8 @@ async function Salidas({
       <SalidaAlibal
             hoy={fechaHoy()}
             lineasConReceta={cargadas.map((receta) => receta.linea)}
-            existencias={existenciasDeTipos(db, progreso?.lineas.map((linea) => linea.tipo) ?? [])}
-            numeroSiguiente={siguienteNumero(db, enCurso?.fecha ?? fechaHoy(), producto)}
+            existencias={await existenciasDeTipos(db, progreso?.lineas.map((linea) => linea.tipo) ?? [])}
+            numeroSiguiente={await siguienteNumero(db, enCurso?.fecha ?? fechaHoy(), producto)}
             token={token}
             enCurso={
               enCurso
@@ -121,7 +121,7 @@ async function Salidas({
                     maximo: progreso.maximo,
                     total: progreso.total,
                     lineas: progreso.lineas,
-                    codigo: codigoDelPesaje(db, pesaje.id),
+                    codigo: await codigoDelPesaje(db, pesaje.id),
                     finalizado: pesaje.finalizado,
                     observaciones: pesaje.observaciones,
                     trazas: minilotes.map((mini) => ({

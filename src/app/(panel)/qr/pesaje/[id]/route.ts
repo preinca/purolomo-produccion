@@ -14,7 +14,7 @@ export async function GET(
   if (!Number.isInteger(pesajeId) || pesajeId < 1) {
     return new Response("Pesaje inválido", { status: 400 });
   }
-  const ficha = fichaQrPesaje(getDb(), pesajeId);
+  const ficha = await fichaQrPesaje(getDb(), pesajeId);
   if (!ficha) return new Response("Ese pesaje todavía no tiene retiros.", { status: 404 });
 
   const png = pngQr(textoQrPesaje(ficha));

@@ -20,6 +20,6 @@ export default function Page() {
 
 async function Stock() {
   await connection();
-  const lotes = listarLotes(getDb(), { limite: 300 }).filter((lote) => lote.estado !== "LOGISTICA");
+  const lotes = (await listarLotes(getDb(), { limite: 300 })).filter((lote) => lote.estado !== "LOGISTICA");
   return <StockEnVivo lotes={lotes} />;
 }

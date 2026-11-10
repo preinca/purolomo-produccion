@@ -32,9 +32,9 @@ async function Entrada({
   await connection();
   const db = getDb();
   const sesion = await leerSesion();
-  if (sesion && sesionSigueActiva(db, sesion)) redirect("/");
+  if (sesion && await sesionSigueActiva(db, sesion)) redirect("/");
   const siguiente = texto((await searchParams).siguiente);
-  const primero = contarUsuarios(db) === 0;
+  const primero = await contarUsuarios(db) === 0;
 
   return (
     <main className="grid min-h-dvh place-items-center bg-white px-4 py-10">

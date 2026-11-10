@@ -29,7 +29,7 @@ async function Receta({
   await connection();
   const parametros = await searchParams;
   const alerta = leer(parametros.alerta);
-  const recetas = recetasCargadas(getDb());
+  const recetas = await recetasCargadas(getDb());
 
   return (
     <div className="grid items-start gap-8 xl:grid-cols-2">

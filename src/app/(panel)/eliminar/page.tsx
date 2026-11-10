@@ -34,7 +34,7 @@ async function Eliminar({
   await connection();
   const parametros = await searchParams;
   const eliminado = texto(parametros.eliminado).trim();
-  const lotes = listarLotes(getDb(), { limite: 300 }).map((lote) => ({
+  const lotes = (await listarLotes(getDb(), { limite: 300 })).map((lote) => ({
     tag: lote.tag,
     producto: lote.producto,
     codigo: lote.codigo,

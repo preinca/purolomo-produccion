@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     return new Response("Elige un producto válido.", { status: 400 });
   }
 
-  const planilla = planillaDeProducto(getDb(), producto);
+  const planilla = await planillaDeProducto(getDb(), producto);
   const filas = fecha ? planilla.filas.filter((fila) => fila.fecha === fecha) : planilla.filas;
   const pdf = pdfRegistroPesajes({
     fecha,

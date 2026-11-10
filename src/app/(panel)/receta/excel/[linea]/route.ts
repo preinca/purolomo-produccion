@@ -12,7 +12,7 @@ export async function GET(
   if (linea !== "1" && linea !== "2") {
     return new Response("Línea inválida", { status: 400 });
   }
-  const receta = recetaVigente(getDb(), linea);
+  const receta = await recetaVigente(getDb(), linea);
   if (!receta) return new Response("No hay receta para esa línea", { status: 404 });
 
   const archivo = await excelDeReceta(receta);

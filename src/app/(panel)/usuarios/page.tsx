@@ -36,7 +36,7 @@ async function Lista({
   await connection();
   await exigirAdmin();
   const error = texto((await searchParams).error);
-  const usuarios = listarUsuarios(getDb());
+  const usuarios = await listarUsuarios(getDb());
   const administradores = usuarios.filter((usuario) => usuario.rango === "administrador");
   const recepcionistas = usuarios.filter((usuario) => usuario.rango === "recepcionista");
   const pesadores = usuarios.filter((usuario) => usuario.rango === "pesador");

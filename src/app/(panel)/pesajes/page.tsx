@@ -35,7 +35,7 @@ async function Planilla({
   const pedidoFecha = leer(parametros.fecha);
   const producto = destinoValido(pedido) ? pedido : "ALIBAL 1 K";
   const fecha = fechaValida(pedidoFecha) ? pedidoFecha : "";
-  const planilla = planillaDeProducto(getDb(), producto);
+  const planilla = await planillaDeProducto(getDb(), producto);
   const filas = fecha ? planilla.filas.filter((fila) => fila.fecha === fecha) : planilla.filas;
   const totalConsumido = Math.round(filas.reduce((suma, fila) => suma + fila.total, 0) * 1000) / 1000;
   const consulta = `producto=${encodeURIComponent(producto)}${fecha ? `&fecha=${fecha}` : ""}`;

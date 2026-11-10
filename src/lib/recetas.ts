@@ -1,4 +1,5 @@
-import type { SqliteDb } from "./db";
+import { arregloPg } from "./arreglo-pg";
+import type { Db } from "./db";
 import type { Resultado } from "./lotes";
 import { productoPorTipo } from "./mpc";
 import * as XLSX from "xlsx";
@@ -233,25 +234,27 @@ function filasDeHoja(hoja: XLSX.WorkSheet | undefined) {
   return filas;
 }
 
-export function guardarReceta(db: SqliteDb, receta: FilasReceta, linea = "1"): Receta {
+export async function guardarReceta(db: Db, receta: FilasReceta, linea = "1"): Promise<Receta> {
   const limites = limitesLinea(linea);
   const total = redondear(receta.items.reduce((suma, item) => suma + item.kg, 0));
   const lineaGuardada = limites.factor === 2 ? "2" : "1";
-  db.exec("BEGIN");
-  try {
-    const insertada = db
-      .prepare(
-        `INSERT INTO recetas (destino, linea, objetivo_kg, tolerancia_kg, minimo_kg, maximo_kg)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .run(ALIBAL_1K.destino, lineaGuardada, total, receta.toleranciaKg, receta.minimoKg, receta.maximoKg);
-    const recetaId = Number(insertada.lastInsertRowid);
-    const insertarItem = db.prepare(
-      `INSERT INTO receta_items (receta_id, tipo, kg, tolerancia_kg, minimo_kg, maximo_kg)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+  return db.transaction(async (tx) => {
+    const insertada = await tx.get<{ id: number }>(
+      `INSERT INTO recetas (destino, linea, objetivo_kg, tolerancia_kg, minimo_kg, maximo_kg)
+       VALUES (?, ?, ?, ?, ?, ?)
+       RETURNING id`,
+      ALIBAL_1K.destino,
+      lineaGuardada,
+      total,
+      receta.toleranciaKg,
+      receta.minimoKg,
+      receta.maximoKg,
     );
+    const recetaId = Number(insertada?.id);
     for (const item of receta.items) {
-      insertarItem.run(
+      await tx.run(
+        `INSERT INTO receta_items (receta_id, tipo, kg, tolerancia_kg, minimo_kg, maximo_kg)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         recetaId,
         item.tipo,
         item.kg,
@@ -260,7 +263,6 @@ export function guardarReceta(db: SqliteDb, receta: FilasReceta, linea = "1"): R
         item.maximo ?? redondear(item.kg + (item.tolerancia ?? receta.toleranciaKg)),
       );
     }
-    db.exec("COMMIT");
     return {
       id: recetaId,
       destino: ALIBAL_1K.destino,
@@ -271,27 +273,22 @@ export function guardarReceta(db: SqliteDb, receta: FilasReceta, linea = "1"): R
       maximoKg: receta.maximoKg,
       items: receta.items,
     };
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
-  }
+  });
 }
 
-function armarReceta(db: SqliteDb, fila: Record<string, unknown>): Receta {
+type FilaItemReceta = {
+  receta_id: number;
+  tipo: string;
+  kg: number;
+  tolerancia_kg: number | null;
+  minimo_kg: number | null;
+  maximo_kg: number | null;
+};
+
+function armarReceta(fila: Record<string, unknown>, items: FilaItemReceta[]): Receta {
   const linea = String(fila.linea ?? "1");
   const toleranciaKg = Number(fila.tolerancia_kg);
   const base = limitesLinea(linea);
-  const items = db
-    .prepare(
-      "SELECT tipo, kg, tolerancia_kg, minimo_kg, maximo_kg FROM receta_items WHERE receta_id = ? ORDER BY id",
-    )
-    .all(Number(fila.id)) as {
-    tipo: string;
-    kg: number;
-    tolerancia_kg: number | null;
-    minimo_kg: number | null;
-    maximo_kg: number | null;
-  }[];
   return {
     id: Number(fila.id),
     destino: String(fila.destino),
@@ -314,23 +311,44 @@ function armarReceta(db: SqliteDb, fila: Record<string, unknown>): Receta {
   };
 }
 
-export function recetaVigente(db: SqliteDb, linea = "1", destino: string = ALIBAL_1K.destino): Receta | null {
-  const lineaBuscada = linea === "2" ? "2" : "1";
-  const fila = db
-    .prepare("SELECT * FROM recetas WHERE destino = ? AND linea = ? ORDER BY id DESC LIMIT 1")
-    .get(destino, lineaBuscada) as Record<string, unknown> | undefined;
-  return fila ? armarReceta(db, fila) : null;
+async function itemsDeRecetas(db: Db, ids: number[]) {
+  if (ids.length === 0) return new Map<number, FilaItemReceta[]>();
+  const filas = await db.all<FilaItemReceta>(
+    `SELECT receta_id, tipo, kg, tolerancia_kg, minimo_kg, maximo_kg
+     FROM receta_items WHERE receta_id = ANY(?::int[]) ORDER BY id`,
+    arregloPg(ids),
+  );
+  const porReceta = new Map<number, FilaItemReceta[]>();
+  for (const fila of filas) {
+    const id = Number(fila.receta_id);
+    porReceta.set(id, [...(porReceta.get(id) ?? []), fila]);
+  }
+  return porReceta;
 }
 
-export function recetasCargadas(db: SqliteDb) {
-  const filas = db
-    .prepare(
-      `SELECT r.* FROM recetas r
-       INNER JOIN (
-         SELECT destino, linea, MAX(id) AS id FROM recetas GROUP BY destino, linea
-       ) ultima ON ultima.id = r.id
-       ORDER BY r.destino, r.linea`,
-    )
-    .all() as Record<string, unknown>[];
-  return filas.map((fila) => armarReceta(db, fila));
+export async function recetaVigente(db: Db, linea = "1", destino: string = ALIBAL_1K.destino): Promise<Receta | null> {
+  const lineaBuscada = linea === "2" ? "2" : "1";
+  const fila = await db.get<Record<string, unknown>>(
+    "SELECT * FROM recetas WHERE destino = ? AND linea = ? ORDER BY id DESC LIMIT 1",
+    destino,
+    lineaBuscada,
+  );
+  if (!fila) return null;
+  const items = await itemsDeRecetas(db, [Number(fila.id)]);
+  return armarReceta(fila, items.get(Number(fila.id)) ?? []);
+}
+
+export async function recetasCargadas(db: Db) {
+  const filas = await db.all<Record<string, unknown>>(
+    `SELECT r.* FROM recetas r
+     INNER JOIN (
+       SELECT destino, linea, MAX(id) AS id FROM recetas GROUP BY destino, linea
+     ) ultima ON ultima.id = r.id
+     ORDER BY r.destino, r.linea`,
+  );
+  const items = await itemsDeRecetas(
+    db,
+    filas.map((fila) => Number(fila.id)),
+  );
+  return filas.map((fila) => armarReceta(fila, items.get(Number(fila.id)) ?? []));
 }

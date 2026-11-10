@@ -16,10 +16,10 @@ export async function GET(
     return new Response("TAG inválido", { status: 400 });
   }
   const db = getDb();
-  const lote = buscarLote(db, limpio);
+  const lote = await buscarLote(db, limpio);
   if (!lote) return new Response("No existe ese TAG", { status: 404 });
 
-  const png = pngQr(textoQr(lote, retirosDeTag(db, lote.tag)));
+  const png = pngQr(textoQr(lote, await retirosDeTag(db, lote.tag)));
   return new Response(new Uint8Array(png), {
     headers: {
       "Content-Type": "image/png",
