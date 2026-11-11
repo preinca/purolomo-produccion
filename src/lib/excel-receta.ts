@@ -41,11 +41,10 @@ export async function excelDeReceta(receta: Receta): Promise<Buffer> {
   });
 
   hoja.columns = [
-    { width: 14 },
+    { width: 22 },
     { width: 14 },
     { width: 16 },
-    { width: 14 },
-    { width: 14 },
+    { width: 24 },
     { width: 26 },
     { width: 16 },
     { width: 32 },
@@ -72,15 +71,15 @@ export async function excelDeReceta(receta: Receta): Promise<Buffer> {
     ["Máximo", maximoProducto],
   ]);
   editable(hoja.getCell(6, 2));
-  editable(hoja.getCell(6, 4));
-  editable(hoja.getCell(6, 6));
   hoja.getCell(6, 2).numFmt = "0.000";
+  hoja.getCell(6, 4).value = { formula: "F5-B6", result: minimoProducto };
   hoja.getCell(6, 4).numFmt = "0.000";
+  hoja.getCell(6, 6).value = { formula: "F5+B6", result: maximoProducto };
   hoja.getCell(6, 6).numFmt = "0.000";
 
   hoja.getRow(7).height = 10;
 
-  const encabezados = ["Tipo", "Kg", "Tolerancia", "Mínimo", "Máximo", "Producto", "Código", "Descripción"];
+  const encabezados = ["Tipo", "Kg", "Tolerancia", "Rango", "Producto", "Código", "Descripción"];
   encabezados.forEach((texto, indice) => {
     const celda = hoja.getCell(8, indice + 1);
     celda.value = texto;
@@ -95,14 +94,13 @@ export async function excelDeReceta(receta: Receta): Promise<Buffer> {
     const fila = 9 + indice;
     const producto = productoPorTipo(item.tipo);
     const toleranciaItem = item.tolerancia ?? toleranciaProducto;
-    const minimoItem = item.minimo ?? item.kg;
     const maximoItem = item.maximo ?? Math.round((item.kg + toleranciaItem) * 1000) / 1000;
-    const valores: (string | number)[] = [
+    const minimoItem = item.minimo ?? item.kg;
+    const valores: (string | number | ExcelJS.CellFormulaValue)[] = [
       item.tipo,
       item.kg,
       toleranciaItem,
-      minimoItem,
-      maximoItem,
+      rangoFormula(`B${fila}`, `(B${fila}+C${fila})`, minimoItem, maximoItem),
       producto?.nombre ?? "",
       producto?.codigo ?? "",
       producto?.descripcion ?? "",
@@ -118,12 +116,12 @@ export async function excelDeReceta(receta: Receta): Promise<Buffer> {
       };
       celda.fill = solido(indice % 2 === 0 ? BLANCO : GRIS);
       celda.alignment = {
-        horizontal: columna >= 1 && columna <= 4 ? "right" : columna === 0 || columna === 6 ? "center" : "left",
+        horizontal: columna >= 1 && columna <= 3 ? "right" : columna === 0 || columna === 5 ? "center" : "left",
         vertical: "middle",
       };
       celda.border = borde;
-      if (columna >= 1 && columna <= 4) celda.numFmt = "0.000";
-      if (columna >= 2 && columna <= 4) editable(celda);
+      if (columna === 1 || columna === 2) celda.numFmt = "0.000";
+      if (columna === 2) editable(celda);
     });
     hoja.getRow(fila).height = 20;
   });
@@ -135,26 +133,25 @@ export async function excelDeReceta(receta: Receta): Promise<Buffer> {
   total.value = "TOTAL";
   const suma = hoja.getCell(totalFila, 2);
   suma.value = { formula: `SUM(B${inicio}:B${fin})`, result: receta.objetivoKg };
-  hoja.getCell(totalFila, 3).value = toleranciaProducto;
-  hoja.getCell(totalFila, 4).value = minimoProducto;
-  hoja.getCell(totalFila, 5).value = maximoProducto;
-  for (let columna = 1; columna <= 8; columna += 1) {
+  hoja.getCell(totalFila, 3).value = { formula: "B6", result: toleranciaProducto };
+  hoja.getCell(totalFila, 4).value = rangoFormula("F5-B6", "F5+B6", minimoProducto, maximoProducto);
+  for (let columna = 1; columna <= 7; columna += 1) {
     const celda = hoja.getCell(totalFila, columna);
     celda.font = { name: "Calibri", size: 12, bold: true, color: { argb: BLANCO } };
     celda.fill = solido(NAVY);
     celda.alignment = { horizontal: columna === 2 ? "right" : "center", vertical: "middle" };
     celda.border = borde;
-    if (columna >= 2 && columna <= 5) celda.numFmt = "0.000";
+    if (columna === 2 || columna === 3) celda.numFmt = "0.000";
   }
   hoja.getRow(totalFila).height = 24;
 
-  hoja.mergeCells(totalFila + 2, 1, totalFila + 2, 8);
+  hoja.mergeCells(totalFila + 2, 1, totalFila + 2, 7);
   const nota = hoja.getCell(totalFila + 2, 1);
-  nota.value = "Las celdas amarillas se pueden cambiar: tolerancia, mínimo y máximo del pesaje y de cada materia prima.";
+  nota.value = "Cambia la tolerancia en las celdas amarillas. El rango se calcula solo, en el pesaje completo y en cada materia prima.";
   nota.font = { name: "Calibri", size: 9, italic: true, color: { argb: SUAVE } };
   nota.alignment = { horizontal: "center" };
 
-  hoja.autoFilter = { from: { row: 8, column: 1 }, to: { row: fin, column: 8 } };
+  hoja.autoFilter = { from: { row: 8, column: 1 }, to: { row: fin, column: 7 } };
   hoja.pageSetup.printTitlesRow = "1:8";
 
   const archivo = await libro.xlsx.writeBuffer();
@@ -169,8 +166,8 @@ function banda(
   fondo: string,
   alto: number,
 ) {
-  hoja.mergeCells(fila, 1, fila, 8);
-  for (let columna = 1; columna <= 8; columna += 1) {
+  hoja.mergeCells(fila, 1, fila, 7);
+  for (let columna = 1; columna <= 7; columna += 1) {
     const celda = hoja.getCell(fila, columna);
     celda.fill = solido(fondo);
     celda.font = { name: "Calibri", ...fuente };
@@ -187,7 +184,7 @@ function editable(celda: ExcelJS.Cell) {
 }
 
 function info(hoja: ExcelJS.Worksheet, fila: number, pares: [string, string | number][]) {
-  for (let columna = 1; columna <= 8; columna += 1) {
+  for (let columna = 1; columna <= 7; columna += 1) {
     const celda = hoja.getCell(fila, columna);
     celda.fill = solido(GRIS);
     celda.border = borde;
@@ -209,7 +206,18 @@ function info(hoja: ExcelJS.Worksheet, fila: number, pares: [string, string | nu
 
 function kilos(valor: number) {
   const redondo = Math.round(valor * 1000) / 1000;
-  return Number.isInteger(redondo) ? String(redondo) : String(redondo);
+  return String(redondo);
+}
+
+function numeroFormula(expr: string) {
+  return `IF(${expr}=INT(${expr}),FIXED(${expr},0,TRUE),FIXED(${expr},3,TRUE))`;
+}
+
+function rangoFormula(minimoExpr: string, maximoExpr: string, minimo: number, maximo: number): ExcelJS.CellFormulaValue {
+  return {
+    formula: `${numeroFormula(minimoExpr)}&" a "&${numeroFormula(maximoExpr)}&" kg"`,
+    result: `${kilos(minimo)} a ${kilos(maximo)} kg`,
+  };
 }
 
 function solido(argb: string): ExcelJS.Fill {
