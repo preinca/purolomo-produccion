@@ -2,19 +2,25 @@ import { createCipheriv, createHmac, pbkdf2Sync, randomBytes } from "node:crypto
 import fs from "node:fs";
 import path from "node:path";
 import { crc32, deflateRawSync, inflateRawSync } from "node:zlib";
-import type { EtiquetaCava } from "./etiqueta-cava";
+import { lineasEtiqueta, type EtiquetaCava } from "./etiqueta-cava";
 
 const CLAVE = ",^_A5Fus&!?j='Epiq*e";
 const ESCALA_BASE = 151.409306798409;
+const ANCHO = 57000;
+const ALTO = 32000;
+const VERSION_ZEBRA_33 = 46;
 
 export function nlblDeEtiqueta(etiqueta: EtiquetaCava, textoDelQr: string) {
-  const formato = fs
-    .readFileSync(rutaPlantilla("formato-qr.xml"), "utf8")
-    .replace(/<Items>[\s\S]*<\/Items>/, `<Items>\n${objetos(etiqueta, textoDelQr)}\n      </Items>`);
-  const solucion = fs.readFileSync(rutaPlantilla("solucion.slnx"));
+  const formato = ajustarPlantilla(fs.readFileSync(rutaPlantilla("formato-qr.xml"), "utf8")).replace(
+    /<Items>[\s\S]*<\/Items>/,
+    `<Items>\n${objetos(etiqueta, textoDelQr)}\n      </Items>`,
+  );
+  const solucion = fs
+    .readFileSync(rutaPlantilla("solucion.slnx"), "utf8")
+    .replace("<FileVersion>50</FileVersion>", `<FileVersion>${VERSION_ZEBRA_33}</FileVersion>`);
   return empaquetar([
     { nombre: "Formats/QR", datos: Buffer.from(formato, "utf8") },
-    { nombre: "QR.slnx", datos: solucion },
+    { nombre: "QR.slnx", datos: Buffer.from(solucion, "utf8") },
   ]);
 }
 
@@ -22,28 +28,34 @@ export function xmlDeEtiqueta(archivo: Buffer) {
   return leer(archivo).get("Formats/QR")?.toString("utf8") ?? "";
 }
 
-function objetos(etiqueta: EtiquetaCava, textoDelQr: string) {
-  const lineas = [
-    { texto: etiqueta.tag, escala: 118 },
-    { texto: etiqueta.producto, escala: 72 },
-    ...partir(etiqueta.descripcion).map((texto) => ({ texto, escala: 58 })),
-    { texto: etiqueta.codigo, escala: 72 },
-    { texto: etiqueta.kgRecibidos, escala: 68 },
-    { texto: etiqueta.fecha, escala: 64 },
-    { texto: etiqueta.hora, escala: 64 },
-  ];
-  const paso = 47000 / lineas.length;
-  const textos = lineas.map((linea, indice) =>
-    texto(linea.texto, 2800, Math.round(1800 + indice * paso), linea.escala, 10010 + indice),
-  );
-  return [...textos, qr(textoDelQr)].join("\n");
+export function solucionDeEtiqueta(archivo: Buffer) {
+  return leer(archivo).get("QR.slnx")?.toString("utf8") ?? "";
 }
 
-function partir(texto: string) {
-  const palabras = texto.trim().split(/\s+/).filter(Boolean);
-  if (palabras.length <= 1) return palabras;
-  const corte = Math.ceil(palabras.length / 2);
-  return [palabras.slice(0, corte).join(" "), palabras.slice(corte).join(" ")];
+function ajustarPlantilla(xml: string) {
+  const medidas = xml
+    .replaceAll("<Width>104000</Width>", `<Width>${ANCHO}</Width>`)
+    .replaceAll("<Height>50800</Height>", `<Height>${ALTO}</Height>`)
+    .replaceAll("<ElementWidth>104000</ElementWidth>", `<ElementWidth>${ANCHO}</ElementWidth>`)
+    .replaceAll("<ElementHeight>50800</ElementHeight>", `<ElementHeight>${ALTO}</ElementHeight>`);
+  return medidas.replace(/<DevModeBuffer>([^<]+)<\/DevModeBuffer>/, (_, base64: string) => {
+    const modo = Buffer.from(base64, "base64");
+    modo.writeUInt16LE(320, 80);
+    modo.writeUInt16LE(570, 82);
+    return `<DevModeBuffer>${modo.toString("base64")}</DevModeBuffer>`;
+  });
+}
+
+function objetos(etiqueta: EtiquetaCava, textoDelQr: string) {
+  const lineas = lineasEtiqueta(etiqueta);
+  const lado = 30000;
+  const izquierda = ANCHO - lado - 600;
+  const columna = izquierda - 900;
+  const paso = Math.floor((ALTO - 600) / lineas.length);
+  const masLarga = Math.max(...lineas.map((linea) => linea.length), 1);
+  const escala = Math.max(48, Math.min(Math.round(paso / 26), Math.floor(columna / (masLarga * 15)), 160));
+  const textos = lineas.map((linea, indice) => texto(linea, 400, 200 + indice * paso, escala, 10010 + indice));
+  return [...textos, qr(textoDelQr, lado, izquierda, Math.round((ALTO - lado) / 2))].join("\n");
 }
 
 function texto(valor: string, x: number, y: number, escala: number, orden: number) {
@@ -84,14 +96,14 @@ function texto(valor: string, x: number, y: number, escala: number, orden: numbe
           </Contents>
           <ScaleFactor>${escala}</ScaleFactor>
           <BestFitMinimumFontSize>4</BestFitMinimumFontSize>
-          <BestFitMaximumFontSize>72</BestFitMaximumFontSize>
+          <BestFitMaximumFontSize>200</BestFitMaximumFontSize>
           <TextBoxAlignment>0</TextBoxAlignment>
           <ZOrder>${orden}</ZOrder>
           <MergeName>${escapar(valor)}</MergeName>
         </Item>`;
 }
 
-function qr(valor: string) {
+function qr(valor: string, lado: number, izquierda: number, arriba: number) {
   const codificado = Buffer.from(valor, "utf8").toString("base64");
   return `        <Item Type="BarcodeDocumentItem">
           <Id>b7c1a4e2-6d58-4a1e-9c33-0a1b2c3d4e5f</Id>
@@ -100,10 +112,10 @@ function qr(valor: string) {
           <SampleValue Type="StringContents" />
           <PrintAsGraphics>False</PrintAsGraphics>
           <Geometry Type="RectGeometry">
-            <Width>40000</Width>
-            <Height>40000</Height>
-            <Left>61000</Left>
-            <Top>5400</Top>
+            <Width>${lado}</Width>
+            <Height>${lado}</Height>
+            <Left>${izquierda}</Left>
+            <Top>${arriba}</Top>
             <AnchoringPoint>0</AnchoringPoint>
           </Geometry>
           <FixedContents Base64Encoded="true">${codificado}</FixedContents>

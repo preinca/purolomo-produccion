@@ -31,6 +31,35 @@ export function etiquetaDeLote(lote: Lote): EtiquetaCava {
   };
 }
 
+export function lineasEtiqueta(etiqueta: EtiquetaCava) {
+  return [
+    `TAG ${etiqueta.tag}`,
+    etiqueta.producto,
+    ...lineasDescripcion(etiqueta.descripcion, 12),
+    etiqueta.codigo,
+    etiqueta.kgRecibidos,
+    etiqueta.fecha,
+    etiqueta.hora,
+  ].filter((linea) => linea.trim());
+}
+
+export function lineasDescripcion(texto: string, maximo = 18) {
+  const palabras = texto.trim().split(/\s+/).filter(Boolean);
+  const lineas: string[] = [];
+  let actual = "";
+  for (const palabra of palabras) {
+    const siguiente = actual ? `${actual} ${palabra}` : palabra;
+    if (actual && siguiente.length > maximo) {
+      lineas.push(actual);
+      actual = palabra;
+    } else {
+      actual = siguiente;
+    }
+  }
+  if (actual) lineas.push(actual);
+  return lineas;
+}
+
 export function fechaCorta(fecha: string) {
   if (!fechaValida(fecha)) return fecha;
   const [year, month, day] = fecha.split("-");

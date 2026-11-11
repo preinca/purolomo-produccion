@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { etiquetaDeLote } from "./etiqueta-cava.ts";
 import type { Lote } from "./lotes.ts";
-import { nlblDeEtiqueta, xmlDeEtiqueta } from "./nlbl-etiqueta.ts";
+import { nlblDeEtiqueta, solucionDeEtiqueta, xmlDeEtiqueta } from "./nlbl-etiqueta.ts";
 import { textoQr } from "./qr.ts";
 
 const lote: Lote = {
@@ -37,7 +37,16 @@ test("el nlbl de la etiqueta usa la plantilla de Zebra y los datos del lote", ()
   assert.equal(archivo.subarray(0, 2).toString(), "PK");
   const xml = xmlDeEtiqueta(archivo);
   assert.match(xml, /ZDesigner ZD220-203dpi ZPL/);
-  assert.match(xml, /<Width>104000<\/Width>/);
+  assert.match(xml, /<Width>57000<\/Width>/);
+  assert.match(xml, /<Height>32000<\/Height>/);
+  assert.equal(xml.includes("104000"), false);
+  assert.equal(xml.includes("50800"), false);
+  const modo = Buffer.from(xml.match(/<DevModeBuffer>([^<]+)<\/DevModeBuffer>/)?.[1] ?? "", "base64");
+  assert.equal(modo.readUInt16LE(80), 320);
+  assert.equal(modo.readUInt16LE(82), 570);
+  const solucion = solucionDeEtiqueta(archivo);
+  assert.match(solucion, /<FileVersion>46<\/FileVersion>/);
+  assert.equal(solucion.includes("<FileVersion>50</FileVersion>"), false);
   assert.match(xml, /400123/);
   assert.match(xml, /CDM SP CH/);
   assert.match(xml, /MPCM01042/);

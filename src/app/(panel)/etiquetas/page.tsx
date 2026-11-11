@@ -23,7 +23,7 @@ export default function Page({
   return (
     <PageFrame
       titulo="Etiquetas en Cava"
-      descripcion="Historial de las etiquetas que se generan al registrar cada entrada. Se descargan en formato NLBL para imprimirlas en Zebra Designer."
+      descripcion="Historial de las etiquetas que se generan al registrar cada entrada. Se descargan en NLBL de Zebra Designer 3.3, de 5,7 cm × 3,2 cm."
     >
       <Suspense fallback={<p className="text-sm text-muted-foreground">Cargando etiquetas…</p>}>
         <Historial searchParams={searchParams} />
