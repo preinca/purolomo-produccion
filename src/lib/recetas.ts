@@ -39,6 +39,36 @@ export type Receta = {
   items: ItemReceta[];
 };
 
+const PLANTILLA_LINEA_1 = [
+  { tipo: "GL", kg: 340 },
+  { tipo: "CH", kg: 240 },
+  { tipo: "CHEXT", kg: 160 },
+] as const;
+
+export function plantillaReceta(linea: string): Receta {
+  const limites = limitesLinea(linea);
+  const items = PLANTILLA_LINEA_1.map((item) => {
+    const kg = redondear(item.kg * limites.factor);
+    return {
+      tipo: item.tipo,
+      kg,
+      tolerancia: limites.tolerancia,
+      minimo: kg,
+      maximo: redondear(kg + limites.tolerancia),
+    };
+  });
+  return {
+    id: 0,
+    destino: ALIBAL_1K.destino,
+    linea: limites.factor === 2 ? "2" : "1",
+    objetivoKg: redondear(items.reduce((suma, item) => suma + item.kg, 0)),
+    toleranciaKg: limites.tolerancia,
+    minimoKg: limites.minimo,
+    maximoKg: limites.maximo,
+    items,
+  };
+}
+
 export function limitesLinea(linea: string) {
   const factor = linea === "2" ? 2 : 1;
   const objetivo = ALIBAL_1K.objetivoLinea1 * factor;
@@ -274,6 +304,32 @@ export async function guardarReceta(db: Db, receta: FilasReceta, linea = "1"): P
       items: receta.items,
     };
   });
+}
+
+export async function eliminarReceta(db: Db, linea: string): Promise<Resultado> {
+  if (linea !== "1" && linea !== "2") return { ok: false, error: "Elige la línea 1 o la línea 2." };
+  const filas = await db.all<{ id: number }>(
+    "SELECT id FROM recetas WHERE destino = ? AND linea = ?",
+    ALIBAL_1K.destino,
+    linea,
+  );
+  if (filas.length === 0) return { ok: false, error: `La línea ${linea} no tiene una receta cargada.` };
+  const ids = filas.map((fila) => Number(fila.id));
+  const uso = await db.get<{ n: number }>(
+    "SELECT COUNT(*)::int AS n FROM pesajes WHERE receta_id = ANY(?::int[])",
+    arregloPg(ids),
+  );
+  if (Number(uso?.n ?? 0) > 0) {
+    return {
+      ok: false,
+      error: `No se puede eliminar la receta de la línea ${linea} porque ya hay pesajes hechos con ella.`,
+    };
+  }
+  await db.transaction(async (tx) => {
+    await tx.run("DELETE FROM receta_items WHERE receta_id = ANY(?::int[])", arregloPg(ids));
+    await tx.run("DELETE FROM recetas WHERE id = ANY(?::int[])", arregloPg(ids));
+  });
+  return { ok: true, value: undefined };
 }
 
 type FilaItemReceta = {

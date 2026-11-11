@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { eliminarRecetaFormulario } from "@/app/actions";
 import { CargarRecetaForm } from "@/components/cargar-receta-form";
 import { PageFrame } from "@/components/page-frame";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDb } from "@/lib/db";
 import { formatoKg } from "@/lib/formato";
@@ -71,13 +73,24 @@ async function Receta({
                     </li>
                   ))}
                 </ul>
-                <a
-                  href={`/receta/excel/${receta.linea}`}
-                  download={`receta-alibal-linea-${receta.linea}.xlsx`}
-                  className="w-fit font-medium underline"
-                >
-                  Descargar Excel
-                </a>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <a
+                    href={`/receta/excel/${receta.linea}`}
+                    className={buttonVariants({ variant: "outline", className: "w-fit" })}
+                  >
+                    Descargar Excel
+                  </a>
+                  <form action={eliminarRecetaFormulario} className="flex flex-wrap items-center gap-3">
+                    <input type="hidden" name="linea" value={receta.linea} />
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" name="confirmar" value="si" required className="size-4" />
+                      Confirmo eliminar
+                    </label>
+                    <button type="submit" className={buttonVariants({ variant: "destructive" })}>
+                      Eliminar receta
+                    </button>
+                  </form>
+                </div>
               </section>
             ))
           )}

@@ -22,7 +22,7 @@ import { lineaPorId } from "@/lib/lineas";
 import { productoPorCodigo } from "@/lib/mpc";
 import { abrirPesaje, buscarMiniLote, buscarPesaje, consumirEnPesaje, faltantesDeReceta, finalizarPesaje, guardarObservacionPesaje, quitarKgDePesaje, retirosDeTag, siguienteNumero, tagsDelTipo } from "@/lib/pesajes";
 import { leerConsumoQr, leerTextoQr } from "@/lib/qr";
-import { guardarReceta, leerRecetaExcel } from "@/lib/recetas";
+import { eliminarReceta, guardarReceta, leerRecetaExcel } from "@/lib/recetas";
 import { exigirAdmin, exigirRango, exigirSesion, leerSesion } from "@/lib/usuarios";
 
 export type EstadoFormulario = { error?: string; ok?: boolean; tag?: string } | null;
@@ -178,6 +178,20 @@ export async function cargarRecetaAlibal(
     };
   }
   await guardarReceta(db, leida.value, linea);
+  refrescar();
+  redirect("/receta");
+}
+
+export async function eliminarRecetaFormulario(formData: FormData) {
+  await exigirAdmin();
+  const linea = texto(formData, "linea");
+  if (formData.get("confirmar") !== "si") {
+    redirect(`/receta?alerta=${encodeURIComponent("Marca la casilla para confirmar que quieres eliminar la receta.")}`);
+  }
+  const resultado = await eliminarReceta(getDb(), linea);
+  if (!resultado.ok) {
+    redirect(`/receta?alerta=${encodeURIComponent(resultado.error)}`);
+  }
   refrescar();
   redirect("/receta");
 }

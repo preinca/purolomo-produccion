@@ -65,6 +65,8 @@ test("el excel descargado de la receta se puede volver a cargar", async () => {
     linea: "1",
     objetivoKg: 730,
     toleranciaKg: 15,
+    minimoKg: 725,
+    maximoKg: 755,
     items: receta.value.items,
   });
   const leida = leerRecetaExcel(archivo, "1");

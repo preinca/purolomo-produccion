@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 import { getDb } from "@/lib/db";
 import { excelDeReceta } from "@/lib/excel-receta";
-import { recetaVigente } from "@/lib/recetas";
+import { plantillaReceta, recetaVigente } from "@/lib/recetas";
 
 export async function GET(
   _request: Request,
@@ -12,8 +12,7 @@ export async function GET(
   if (linea !== "1" && linea !== "2") {
     return new Response("Línea inválida", { status: 400 });
   }
-  const receta = await recetaVigente(getDb(), linea);
-  if (!receta) return new Response("No hay receta para esa línea", { status: 404 });
+  const receta = (await recetaVigente(getDb(), linea)) ?? plantillaReceta(linea);
 
   const archivo = await excelDeReceta(receta);
   return new Response(new Uint8Array(archivo), {
