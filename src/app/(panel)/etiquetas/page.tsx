@@ -1,6 +1,6 @@
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { enlacePdf, EtiquetaCava } from "@/components/etiqueta-cava";
+import { enlaceNlbl, EtiquetaCava } from "@/components/etiqueta-cava";
 import { PageFrame } from "@/components/page-frame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -23,7 +23,7 @@ export default function Page({
   return (
     <PageFrame
       titulo="Etiquetas en Cava"
-      descripcion="Historial de las etiquetas que se generan al registrar cada entrada. Cada una lleva el QR, la fecha y hora de recepción, el producto y el código del catálogo."
+      descripcion="Historial de las etiquetas que se generan al registrar cada entrada. Se descargan en formato NLBL para imprimirlas en Zebra Designer."
     >
       <Suspense fallback={<p className="text-sm text-muted-foreground">Cargando etiquetas…</p>}>
         <Historial searchParams={searchParams} />
@@ -52,11 +52,11 @@ async function Historial({
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Etiqueta {visible.tag}</CardTitle>
             <a
-              href={enlacePdf(visible.tag)}
-              download={`etiqueta-${visible.tag}.pdf`}
+              href={enlaceNlbl(visible.tag)}
+              download={`etiqueta-${visible.tag}.nlbl`}
               className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/80 sm:w-auto"
             >
-              Descargar PDF
+              Descargar NLBL
             </a>
           </CardHeader>
           <CardContent>
@@ -86,7 +86,7 @@ async function Historial({
                   <p className="font-mono text-xs">{etiqueta.codigo}</p>
                   <div className="flex gap-4">
                     <a href={`/etiquetas?tag=${etiqueta.tag}`} className="font-medium underline">Ver</a>
-                    <a href={enlacePdf(etiqueta.tag)} download={`etiqueta-${etiqueta.tag}.pdf`} className="font-medium underline">PDF</a>
+                    <a href={enlaceNlbl(etiqueta.tag)} download={`etiqueta-${etiqueta.tag}.nlbl`} className="font-medium underline">NLBL</a>
                   </div>
                 </article>
               );
@@ -129,8 +129,8 @@ async function Historial({
                         <a href={`/etiquetas?tag=${etiqueta.tag}`} className="mr-3 text-sm font-medium underline">
                           Ver
                         </a>
-                        <a href={enlacePdf(etiqueta.tag)} download={`etiqueta-${etiqueta.tag}.pdf`} className="text-sm font-medium underline">
-                          PDF
+                        <a href={enlaceNlbl(etiqueta.tag)} download={`etiqueta-${etiqueta.tag}.nlbl`} className="text-sm font-medium underline">
+                          NLBL
                         </a>
                       </TableCell>
                     </TableRow>

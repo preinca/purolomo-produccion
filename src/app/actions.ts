@@ -22,6 +22,7 @@ import { lineaPorId } from "@/lib/lineas";
 import { productoPorCodigo } from "@/lib/mpc";
 import { abrirPesaje, buscarMiniLote, buscarPesaje, consumirEnPesaje, faltantesDeReceta, finalizarPesaje, guardarObservacionPesaje, quitarKgDePesaje, retirosDeTag, siguienteNumero, tagsDelTipo } from "@/lib/pesajes";
 import { leerConsumoQr, leerTextoQr } from "@/lib/qr";
+import { encolarEtiquetasPendientes } from "@/lib/impresion";
 import { eliminarReceta, guardarReceta, leerRecetaExcel } from "@/lib/recetas";
 import { exigirAdmin, exigirRango, exigirSesion, leerSesion } from "@/lib/usuarios";
 
@@ -332,6 +333,16 @@ export async function crearRecepcion(
   if (!resultado.ok) return { error: resultado.error };
   refrescar();
   redirect(`/entradas?etiqueta=${resultado.value.tag}`);
+}
+
+export async function imprimirEtiquetasPendientes() {
+  await exigirRango(["administrador", "recepcionista"]);
+  const resultado = await encolarEtiquetasPendientes(getDb());
+  const aviso = resultado.ok
+    ? `Se enviaron ${resultado.value} etiquetas a la impresora de la oficina.`
+    : resultado.error;
+  refrescar();
+  redirect(`/entradas?aviso=${encodeURIComponent(aviso)}`);
 }
 
 export async function validarTransferencia(formData: FormData) {

@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import { getDb } from "@/lib/db";
 import { etiquetaDeLote } from "@/lib/etiqueta-cava";
 import { buscarLote } from "@/lib/lotes";
-import { pdfDeEtiqueta } from "@/lib/pdf-etiqueta";
+import { nlblDeEtiqueta } from "@/lib/nlbl-etiqueta";
 import { retirosDeTag } from "@/lib/pesajes";
 import { textoQr } from "@/lib/qr";
 
@@ -18,11 +18,11 @@ export async function GET(
   const lote = await buscarLote(db, limpio);
   if (!lote) return new Response("No existe ese TAG", { status: 404 });
 
-  const pdf = pdfDeEtiqueta(etiquetaDeLote(lote), textoQr(lote, await retirosDeTag(db, lote.tag)));
-  return new Response(new Uint8Array(pdf), {
+  const archivo = nlblDeEtiqueta(etiquetaDeLote(lote), textoQr(lote, await retirosDeTag(db, lote.tag)));
+  return new Response(new Uint8Array(archivo), {
     headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="etiqueta-${lote.tag}.pdf"`,
+      "Content-Type": "application/octet-stream",
+      "Content-Disposition": `attachment; filename="etiqueta-${lote.tag}.nlbl"`,
       "Cache-Control": "no-store",
     },
   });

@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<EuroPlus.NiceLabel>
+  <FileVersion>50</FileVersion>
+  <SolutionFileVersion Type="SolutionFileVersion">
+    <FileVersion>1</FileVersion>
+  </SolutionFileVersion>
+  <Id>0c08a2a3-c6b0-4680-a0e7-acf943ca6b12</Id>
+  <Name>QR</Name>
+  <SampleValue Type="StringContents" />
+  <SolutionType>1</SolutionType>
+  <LicenseInfos>
+    <Item Type="SolutionLicenseInfo">
+      <SerialNumber>DEMO TRIAL</SerialNumber>
+    </Item>
+  </LicenseInfos>
+  <SolutionSummary Type="SolutionSummary">
+    <SolutionName>QR</SolutionName>
+    <FormatCount>1</FormatCount>
+    <HasErrors>True</HasErrors>
+  </SolutionSummary>
+  <MergeName>PIG</MergeName>
+</EuroPlus.NiceLabel>

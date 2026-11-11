@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { etiquetaDeLote, pieEtiqueta } from "./etiqueta-cava.ts";
+import { etiquetaDeLote } from "./etiqueta-cava.ts";
 import type { Lote } from "./lotes.ts";
-import { pdfDeEtiqueta } from "./pdf-etiqueta.ts";
+import { nlblDeEtiqueta, xmlDeEtiqueta } from "./nlbl-etiqueta.ts";
 import { textoQr } from "./qr.ts";
 
 const lote: Lote = {
@@ -31,21 +31,19 @@ test("la etiqueta usa la fecha, la hora de Caracas y el catálogo", () => {
   assert.equal(etiqueta.kgRecibidos, "756 kg");
 });
 
-test("el pdf de la etiqueta trae el QR dibujado y la fecha de recepción", () => {
+test("el nlbl de la etiqueta usa la plantilla de Zebra y los datos del lote", () => {
   const etiqueta = etiquetaDeLote(lote);
-  assert.equal(pieEtiqueta(etiqueta.fecha), "CODIGO 22 - PRF - 012 - FECHA EMISION = 05/11/2026");
-  const pdf = pdfDeEtiqueta(etiqueta, textoQr(lote));
-  const texto = pdf.toString("latin1");
-  assert.match(texto, /MediaBox \[0 0 161\.57 90\.71\]/);
-  assert.equal(texto.startsWith("%PDF-1.4"), true);
-  assert.equal(texto.trimEnd().endsWith("%%EOF"), true);
-  assert.match(texto, /400123/);
-  assert.match(texto, /MPCM01042/);
-  assert.match(texto, /756 kg/);
-  assert.match(texto, /05\/11\/2026/);
-  assert.match(texto, /13:52:08/);
-  assert.match(texto, /CODIGO 22 - PRF - 012 - FECHA EMISION = 05\/11\/2026/);
-  assert.equal(texto.includes("N EMISION"), false);
-  assert.equal(texto.includes("PAG 1 DE 1"), false);
-  assert.ok(texto.split(" re f").length > 30);
+  const archivo = nlblDeEtiqueta(etiqueta, textoQr(lote));
+  assert.equal(archivo.subarray(0, 2).toString(), "PK");
+  const xml = xmlDeEtiqueta(archivo);
+  assert.match(xml, /ZDesigner ZD220-203dpi ZPL/);
+  assert.match(xml, /<Width>104000<\/Width>/);
+  assert.match(xml, /400123/);
+  assert.match(xml, /CDM SP CH/);
+  assert.match(xml, /MPCM01042/);
+  assert.match(xml, /756 kg/);
+  assert.match(xml, /05\/11\/2026/);
+  assert.match(xml, /13:52:08/);
+  assert.match(xml, /BarcodeDocumentItem/);
+  assert.equal(xml.includes("CODIGO 22"), false);
 });
