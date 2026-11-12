@@ -103,13 +103,19 @@ export function getDb(): Db {
     const cliente = postgres(urlBaseDatos(), {
       // El pooler de Supabase en modo transacción no admite sentencias preparadas.
       prepare: false,
+      // Sin envío en cadena (pipelining): cuando hay más consultas que conexiones, el driver
+      // mandaba varias seguidas por la misma conexión y el pooler de Supabase dejaba de responder
+      // (las consultas sin parámetros se quedaban colgadas y la página en blanco). Con 0, cada
+      // conexión espera la respuesta antes de mandar la siguiente consulta.
+      max_pipeline: 0,
       // En Vercel cada instancia es corta: una sola conexión evita saturar el pooler.
       max: process.env.VERCEL ? 1 : Number(process.env.DB_MAX_CONEXIONES ?? 3),
       idle_timeout: 20,
       max_lifetime: 60 * 10,
       connect_timeout: 10,
       ssl: /localhost|127\.0\.0\.1/.test(urlBaseDatos()) ? false : "require",
-    });
+      // max_pipeline existe en el driver (src/index.js) pero falta en sus tipos.
+    } as postgres.Options<Record<string, postgres.PostgresType>>);
     globalParaDb.purolomoDb = dbDesdePostgres(cliente);
   }
   return globalParaDb.purolomoDb;
