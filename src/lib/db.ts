@@ -72,18 +72,47 @@ export function crearDb(
 
 type ClientePostgres = ReturnType<typeof postgres>;
 
-function dbDesdePostgres(cliente: ClientePostgres): Db {
-  const sobre = (sql: ClientePostgres | postgres.TransactionSql): Conexion => ({
-    async consultar(texto, params) {
-      const resultado = await sql.unsafe(texto, params as postgres.ParameterOrJSON<never>[]);
-      return { filas: [...resultado] as Fila[], cambios: resultado.count ?? 0 };
-    },
-    async ejecutar(texto) {
-      // Protocolo simple: admite varias sentencias seguidas (el esquema completo, por ejemplo).
-      await sql.unsafe(texto).simple();
-    },
+/** Deja pasar como mucho `limite` tareas a la vez; las demás esperan su turno en orden. */
+export function crearTurnos(limite: number) {
+  let enCurso = 0;
+  const cola: (() => void)[] = [];
+  return async function conTurno<T>(tarea: () => Promise<T>): Promise<T> {
+    if (enCurso >= limite) await new Promise<void>((avisar) => cola.push(avisar));
+    else enCurso += 1;
+    try {
+      return await tarea();
+    } finally {
+      const siguiente = cola.shift();
+      if (siguiente) siguiente();
+      else enCurso -= 1;
+    }
+  };
+}
+
+/**
+ * El driver, cuando hay más consultas que conexiones, envía varias seguidas por la misma
+ * conexión (pipelining). El pooler de Supabase en modo transacción deja colgadas las consultas
+ * sin parámetros enviadas así: la página se quedaba en blanco. Para que nunca ocurra, aquí
+ * nunca hay más consultas en marcha que conexiones, y dentro de una transacción van de una en una.
+ */
+function dbDesdePostgres(cliente: ClientePostgres, conexiones: number): Db {
+  const turnoGeneral = crearTurnos(conexiones);
+  const sobre = (sql: ClientePostgres | postgres.TransactionSql, turno: ReturnType<typeof crearTurnos>): Conexion => ({
+    consultar: (texto, params) =>
+      turno(async () => {
+        const resultado = await sql.unsafe(texto, params as postgres.ParameterOrJSON<never>[]);
+        return { filas: [...resultado] as Fila[], cambios: resultado.count ?? 0 };
+      }),
+    ejecutar: (texto) =>
+      turno(async () => {
+        // Protocolo simple: admite varias sentencias seguidas (el esquema completo, por ejemplo).
+        await sql.unsafe(texto).simple();
+      }),
   });
-  return crearDb(sobre(cliente), (fn) => cliente.begin((tx) => fn(sobre(tx))) as Promise<unknown>);
+  return crearDb(sobre(cliente, turnoGeneral), (fn) =>
+    // La transacción ocupa una conexión (un turno) mientras dura.
+    turnoGeneral(() => cliente.begin((tx) => fn(sobre(tx, crearTurnos(1)))) as Promise<unknown>),
+  );
 }
 
 const globalParaDb = globalThis as unknown as { purolomoDb?: Db };
@@ -100,23 +129,18 @@ export function urlBaseDatos() {
 
 export function getDb(): Db {
   if (!globalParaDb.purolomoDb) {
+    // En Vercel cada instancia es corta: una sola conexión evita saturar el pooler.
+    const conexiones = Math.max(1, process.env.VERCEL ? 1 : Number(process.env.DB_MAX_CONEXIONES ?? 3));
     const cliente = postgres(urlBaseDatos(), {
       // El pooler de Supabase en modo transacción no admite sentencias preparadas.
       prepare: false,
-      // Sin envío en cadena (pipelining): cuando hay más consultas que conexiones, el driver
-      // mandaba varias seguidas por la misma conexión y el pooler de Supabase dejaba de responder
-      // (las consultas sin parámetros se quedaban colgadas y la página en blanco). Con 0, cada
-      // conexión espera la respuesta antes de mandar la siguiente consulta.
-      max_pipeline: 0,
-      // En Vercel cada instancia es corta: una sola conexión evita saturar el pooler.
-      max: process.env.VERCEL ? 1 : Number(process.env.DB_MAX_CONEXIONES ?? 3),
+      max: conexiones,
       idle_timeout: 20,
       max_lifetime: 60 * 10,
       connect_timeout: 10,
       ssl: /localhost|127\.0\.0\.1/.test(urlBaseDatos()) ? false : "require",
-      // max_pipeline existe en el driver (src/index.js) pero falta en sus tipos.
-    } as postgres.Options<Record<string, postgres.PostgresType>>);
-    globalParaDb.purolomoDb = dbDesdePostgres(cliente);
+    });
+    globalParaDb.purolomoDb = dbDesdePostgres(cliente, conexiones);
   }
   return globalParaDb.purolomoDb;
 }
