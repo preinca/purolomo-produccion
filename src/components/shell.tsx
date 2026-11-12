@@ -26,7 +26,6 @@ import { cerrarSesion } from "@/app/usuarios-acciones";
 import { BuscadorGlobal } from "@/components/buscador-global";
 import { LogoPurolomo } from "@/components/logo";
 import { nombreRango, type Rango } from "@/lib/acceso";
-import type { Sugerencia } from "@/lib/sugerencia";
 import { cn } from "@/lib/utils";
 
 const todos: Rango[] = ["administrador", "consulta", "recepcionista", "pesador"];
@@ -77,12 +76,10 @@ function cerrarMenu() {
 
 export function Shell({
   children,
-  sugerencias,
   nombre,
   rango,
 }: {
   children: React.ReactNode;
-  sugerencias: Sugerencia[];
   nombre: string;
   rango: Rango;
 }) {
@@ -164,7 +161,7 @@ export function Shell({
           >
             <Menu className="size-5" />
           </label>
-          <BuscadorGlobal sugerencias={sugerencias} />
+          <BuscadorGlobal />
           <div className="flex shrink-0 items-center gap-2">
             <div className="hidden text-right sm:block">
               <p className="text-xs font-semibold leading-tight">{nombre}</p>

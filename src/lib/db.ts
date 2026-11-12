@@ -103,9 +103,11 @@ export function getDb(): Db {
     const cliente = postgres(urlBaseDatos(), {
       // El pooler de Supabase en modo transacción no admite sentencias preparadas.
       prepare: false,
-      max: Number(process.env.DB_MAX_CONEXIONES ?? 5),
+      // En Vercel cada instancia es corta: una sola conexión evita saturar el pooler.
+      max: process.env.VERCEL ? 1 : Number(process.env.DB_MAX_CONEXIONES ?? 3),
       idle_timeout: 20,
-      connect_timeout: 15,
+      max_lifetime: 60 * 10,
+      connect_timeout: 10,
       ssl: /localhost|127\.0\.0\.1/.test(urlBaseDatos()) ? false : "require",
     });
     globalParaDb.purolomoDb = dbDesdePostgres(cliente);

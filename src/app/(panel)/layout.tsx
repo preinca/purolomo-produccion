@@ -2,7 +2,6 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { Shell } from "@/components/shell";
-import { sugerenciasGlobales } from "@/lib/busqueda";
 import { getDb } from "@/lib/db";
 import { leerSesion, sesionSigueActiva } from "@/lib/usuarios";
 
@@ -20,7 +19,7 @@ async function Marco({ children }: { children: React.ReactNode }) {
   const sesion = await leerSesion();
   if (!sesion || !await sesionSigueActiva(db, sesion)) redirect("/entrar");
   return (
-    <Shell sugerencias={await sugerenciasGlobales(db)} nombre={sesion.nombre} rango={sesion.rango}>
+    <Shell nombre={sesion.nombre} rango={sesion.rango}>
       {children}
     </Shell>
   );

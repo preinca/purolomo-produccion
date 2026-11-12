@@ -122,8 +122,18 @@ if (-not [RawPrinter]::Send($printer, $bytes)) { exit 1 }
   }
 }
 
-console.log("Esperando etiquetas. Deja esta ventana abierta.");
-setInterval(() => {
-  ciclo().catch((error) => console.error(error instanceof Error ? error.message : error));
-}, 4000);
-ciclo().catch((error) => console.error(error instanceof Error ? error.message : error));
+// Cada consulta a la aplicación es una ejecución en Vercel y una consulta a Supabase:
+// 10 segundos es suficiente para imprimir sin gastar de más. Se cambia con ZEBRA_INTERVALO (en ms).
+const intervalo = Math.max(3000, Number(process.env.ZEBRA_INTERVALO || 10000));
+
+console.log(`Esperando etiquetas cada ${intervalo / 1000} s. Deja SOLO esta ventana abierta.`);
+
+// La siguiente consulta empieza cuando termina la anterior, así nunca se solapan.
+async function bucle() {
+  for (;;) {
+    await ciclo().catch((error) => console.error(error instanceof Error ? error.message : error));
+    await new Promise((resolver) => setTimeout(resolver, intervalo));
+  }
+}
+
+bucle();

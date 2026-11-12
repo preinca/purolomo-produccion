@@ -330,28 +330,7 @@ export async function guardarReceta(db: Db, receta: FilasReceta, linea = "1"): P
   });
 }
 
-const esquemaGlobal = globalThis as { purolomoRecetaVigente?: Promise<void> };
-
-function asegurarRecetaVigente(db: Db) {
-  if (!esquemaGlobal.purolomoRecetaVigente) {
-    esquemaGlobal.purolomoRecetaVigente = prepararRecetaVigente(db).catch((error: unknown) => {
-      esquemaGlobal.purolomoRecetaVigente = undefined;
-      throw error;
-    });
-  }
-  return esquemaGlobal.purolomoRecetaVigente;
-}
-
-async function prepararRecetaVigente(db: Db) {
-  try {
-    await db.get("SELECT vigente FROM recetas LIMIT 1");
-  } catch {
-    await db.exec("ALTER TABLE recetas ADD COLUMN IF NOT EXISTS vigente INTEGER NOT NULL DEFAULT 1");
-  }
-}
-
 export async function eliminarReceta(db: Db, linea: string): Promise<Resultado> {
-  await asegurarRecetaVigente(db);
   if (linea !== "1" && linea !== "2") return { ok: false, error: "Elige la línea 1 o la línea 2." };
   const enCurso = await db.get<{ numero: number; linea: string }>(
     "SELECT numero, linea FROM pesajes WHERE destino = ? AND finalizado = 0 ORDER BY id DESC LIMIT 1",
@@ -440,7 +419,6 @@ async function itemsDeRecetas(db: Db, ids: number[]) {
 }
 
 export async function recetaVigente(db: Db, linea = "1", destino: string = ALIBAL_1K.destino): Promise<Receta | null> {
-  await asegurarRecetaVigente(db);
   const lineaBuscada = linea === "2" ? "2" : "1";
   const fila = await db.get<Record<string, unknown>>(
     "SELECT * FROM recetas WHERE destino = ? AND linea = ? AND vigente = 1 ORDER BY id DESC LIMIT 1",
@@ -453,7 +431,6 @@ export async function recetaVigente(db: Db, linea = "1", destino: string = ALIBA
 }
 
 export async function recetasCargadas(db: Db) {
-  await asegurarRecetaVigente(db);
   const filas = await db.all<Record<string, unknown>>(
     `SELECT r.* FROM recetas r
      INNER JOIN (

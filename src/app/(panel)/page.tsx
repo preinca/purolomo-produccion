@@ -23,8 +23,7 @@ export default function Page() {
 async function Dashboard() {
   await connection();
   const db = getDb();
-  const resumen = await resumir(db);
-  const lotes = await listarLotes(db, { limite: 12 });
+  const [resumen, lotes] = await Promise.all([resumir(db), listarLotes(db, { limite: 12 })]);
 
   return (
     <div className="grid gap-8">
@@ -32,7 +31,7 @@ async function Dashboard() {
         <Kpi
           titulo="Total paletas"
           valor={formatoNumero(resumen.paletas)}
-          detalle="Lotes activos en SQLite"
+          detalle="Lotes activos"
           color="border-purolomo-red"
         />
         <Kpi
