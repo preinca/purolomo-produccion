@@ -3,8 +3,7 @@ import { getDb } from "@/lib/db";
 import { etiquetaDeLote } from "@/lib/etiqueta-cava";
 import { buscarLote } from "@/lib/lotes";
 import { nlblDeEtiqueta } from "@/lib/nlbl-etiqueta";
-import { retirosDeTag } from "@/lib/pesajes";
-import { textoQr } from "@/lib/qr";
+import { textoQrDeEtiqueta } from "@/lib/qr";
 
 export async function GET(
   _request: Request,
@@ -18,7 +17,7 @@ export async function GET(
   const lote = await buscarLote(db, limpio);
   if (!lote) return new Response("No existe ese TAG", { status: 404 });
 
-  const archivo = nlblDeEtiqueta(etiquetaDeLote(lote), textoQr(lote, await retirosDeTag(db, lote.tag)));
+  const archivo = nlblDeEtiqueta(etiquetaDeLote(lote), textoQrDeEtiqueta(lote.tag));
   return new Response(new Uint8Array(archivo), {
     headers: {
       "Content-Type": "application/octet-stream",

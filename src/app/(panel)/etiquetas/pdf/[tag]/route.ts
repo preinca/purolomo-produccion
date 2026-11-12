@@ -3,8 +3,7 @@ import { getDb } from "@/lib/db";
 import { etiquetaDeLote } from "@/lib/etiqueta-cava";
 import { buscarLote } from "@/lib/lotes";
 import { pdfDeEtiqueta } from "@/lib/pdf-etiqueta";
-import { retirosDeTag } from "@/lib/pesajes";
-import { textoQr } from "@/lib/qr";
+import { textoQrDeEtiqueta } from "@/lib/qr";
 
 export async function GET(
   _request: Request,
@@ -18,7 +17,7 @@ export async function GET(
   const lote = await buscarLote(db, limpio);
   if (!lote) return new Response("No existe ese TAG", { status: 404 });
 
-  const archivo = pdfDeEtiqueta(etiquetaDeLote(lote), textoQr(lote, await retirosDeTag(db, lote.tag)));
+  const archivo = pdfDeEtiqueta(etiquetaDeLote(lote), textoQrDeEtiqueta(lote.tag));
   return new Response(new Uint8Array(archivo), {
     headers: {
       "Content-Type": "application/pdf",

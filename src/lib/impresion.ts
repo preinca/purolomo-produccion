@@ -1,7 +1,7 @@
 import type { Db } from "./db";
 import type { Resultado, Lote } from "./lotes";
 import { productoPorCodigo } from "./mpc";
-import { textoQr } from "./qr";
+import { textoQrDeEtiqueta } from "./qr";
 import { zplDeLotes } from "./zpl-etiqueta";
 
 export async function contarEtiquetas(db: Db, modo: "pendiente" | "cola") {
@@ -58,7 +58,7 @@ export async function tomarImpresion(db: Db): Promise<{ id: number; zpl: string 
       const fila = await tx.get<Record<string, unknown>>("SELECT * FROM lotes WHERE tag = ?", item.tag);
       if (fila) lotes.push(leerLote(fila));
     }
-    return { id, zpl: zplDeLotes(lotes.map((lote) => ({ lote, qr: textoQr(lote) }))) };
+    return { id, zpl: zplDeLotes(lotes.map((lote) => ({ lote, qr: textoQrDeEtiqueta(lote.tag) }))) };
   });
 }
 

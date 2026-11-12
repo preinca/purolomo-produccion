@@ -89,14 +89,22 @@ export function leerTextoQr(texto: string): LecturaQr | null {
     if (sep <= 0) continue;
     campos.set(linea.slice(0, sep).trim().toLowerCase(), linea.slice(sep + 1).trim());
   }
-  const tag = campos.get("tag") ?? "";
-  if (!/^\d{4,8}$/.test(tag)) return null;
+  const tagCampo = campos.get("tag") ?? "";
+  const tagEnTexto = texto.match(/TAG\s*[: ]\s*(\d{4,8})/i)?.[1] ?? "";
+  const tagSolo = texto.trim().match(/^(\d{4,8})$/)?.[1] ?? "";
+  const tag = /^\d{4,8}$/.test(tagCampo) ? tagCampo : tagEnTexto || tagSolo;
+  if (!tag) return null;
   return {
     tag,
     producto: campos.get("producto") ?? "",
     tipo: campos.get("tipo") ?? "",
     codigo: campos.get("codigo") ?? "",
   };
+}
+
+/** Texto corto para la etiqueta impresa. Así el QR tiene módulos grandes y el celular lo lee de una vez. */
+export function textoQrDeEtiqueta(tag: string) {
+  return `PUROLOMO MPC\nTAG:${tag.trim()}`;
 }
 
 export function textoQrMiniLote(datos: {

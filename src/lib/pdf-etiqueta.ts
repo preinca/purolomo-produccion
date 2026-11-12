@@ -25,9 +25,10 @@ export function pdfDeEtiqueta(etiqueta: EtiquetaCava, textoDelQr: string) {
 
 function dibujo(etiqueta: EtiquetaCava, textoDelQr: string) {
   const margen = 2.2;
-  const ladoQr = redondear(ALTO * 0.58);
-  const xQr = redondear(ANCHO - ladoQr - 1.4);
-  const yQr = redondear((ALTO - ladoQr) / 2);
+  const anchoQr = redondear(ALTO * 0.58);
+  const altoQr = redondear(Math.min(ALTO - margen * 2, anchoQr * 1.28));
+  const xQr = redondear(ANCHO - anchoQr - 1.4);
+  const yQr = redondear((ALTO - altoQr) / 2);
   const anchoTexto = xQr - margen - 1.2;
   const lineas = lineasEtiqueta(etiqueta);
   const altoUtil = ALTO - margen * 2;
@@ -37,7 +38,7 @@ function dibujo(etiqueta: EtiquetaCava, textoDelQr: string) {
   const masLargaTag = Math.max(lineas[0]?.length ?? 1, 1);
   const tamCuerpo = Math.max(5, Math.min(paso * 0.92, anchoTexto / (masLargaCuerpo * 0.56)));
   const tamTag = Math.max(tamCuerpo, Math.min(paso * 1.55, anchoTexto / (masLargaTag * 0.52), tamCuerpo * 1.7));
-  const comandos = ["0 0 0 rg", ...modulosQr(textoDelQr, xQr, yQr, ladoQr)];
+  const comandos = ["0 0 0 rg", ...modulosQr(textoDelQr, xQr, yQr, anchoQr, altoQr)];
 
   let tope = ALTO - margen;
   lineas.forEach((linea, indice) => {
@@ -52,18 +53,19 @@ function redondear(valor: number) {
   return Math.round(valor * 100) / 100;
 }
 
-function modulosQr(textoDelQr: string, x: number, y: number, tamano: number) {
-  const qr = encode(textoDelQr, { ecc: "M", border: 2 });
-  const celda = tamano / qr.size;
+function modulosQr(textoDelQr: string, x: number, y: number, ancho: number, alto: number) {
+  const qr = encode(textoDelQr, { ecc: "H", border: 2 });
+  const celdaX = ancho / qr.size;
+  const celdaY = alto / qr.size;
   const comandos = ["0 0 0 rg"];
   for (let fila = 0; fila < qr.size; fila++) {
     let inicio = -1;
     const cerrar = (hasta: number) => {
       if (inicio < 0) return;
-      const px = x + inicio * celda;
-      const py = y + tamano - (fila + 1) * celda;
-      const ancho = (hasta - inicio) * celda;
-      comandos.push(`${px.toFixed(2)} ${py.toFixed(2)} ${ancho.toFixed(2)} ${celda.toFixed(2)} re f`);
+      const px = x + inicio * celdaX;
+      const py = y + alto - (fila + 1) * celdaY;
+      const anchoBarra = (hasta - inicio) * celdaX;
+      comandos.push(`${px.toFixed(2)} ${py.toFixed(2)} ${anchoBarra.toFixed(2)} ${celdaY.toFixed(2)} re f`);
       inicio = -1;
     };
     for (let columna = 0; columna < qr.size; columna++) {

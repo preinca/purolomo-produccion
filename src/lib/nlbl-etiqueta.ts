@@ -48,8 +48,9 @@ function ajustarPlantilla(xml: string) {
 
 function objetos(etiqueta: EtiquetaCava, textoDelQr: string) {
   const lineas = lineasEtiqueta(etiqueta);
-  const lado = 21000;
-  const izquierda = ANCHO - lado - 1200;
+  const anchoQr = 21000;
+  const altoQr = Math.round(anchoQr * 1.28);
+  const izquierda = ANCHO - anchoQr - 1200;
   const columna = izquierda - 800;
   const margen = 2400;
   const usable = ALTO - margen * 2;
@@ -65,7 +66,7 @@ function objetos(etiqueta: EtiquetaCava, textoDelQr: string) {
     y += indice === 0 ? Math.round(paso * 1.7) : paso;
     return comando;
   });
-  return [...textos, qr(textoDelQr, lado, izquierda, Math.round((ALTO - lado) / 2))].join("\n");
+  return [...textos, qr(textoDelQr, anchoQr, altoQr, izquierda, Math.round((ALTO - altoQr) / 2))].join("\n");
 }
 
 function texto(valor: string, x: number, y: number, escala: number, orden: number) {
@@ -113,7 +114,7 @@ function texto(valor: string, x: number, y: number, escala: number, orden: numbe
         </Item>`;
 }
 
-function qr(valor: string, lado: number, izquierda: number, arriba: number) {
+function qr(valor: string, ancho: number, alto: number, izquierda: number, arriba: number) {
   const codificado = Buffer.from(valor, "utf8").toString("base64");
   return `        <Item Type="BarcodeDocumentItem">
           <Id>b7c1a4e2-6d58-4a1e-9c33-0a1b2c3d4e5f</Id>
@@ -122,8 +123,8 @@ function qr(valor: string, lado: number, izquierda: number, arriba: number) {
           <SampleValue Type="StringContents" />
           <PrintAsGraphics>False</PrintAsGraphics>
           <Geometry Type="RectGeometry">
-            <Width>${lado}</Width>
-            <Height>${lado}</Height>
+            <Width>${ancho}</Width>
+            <Height>${alto}</Height>
             <Left>${izquierda}</Left>
             <Top>${arriba}</Top>
             <AnchoringPoint>0</AnchoringPoint>

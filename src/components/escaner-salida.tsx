@@ -44,52 +44,73 @@ export function EscanerSalida({
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     let vivo = true;
+    let ocupado = false;
+    let espera = 0;
 
-    const tick = async () => {
-      if (!vivo) return;
-      if (video.readyState >= 2 && ctx && video.videoWidth > 0) {
-        const maxLado = 800;
-        const mayor = Math.max(video.videoWidth, video.videoHeight);
-        const escala = mayor > maxLado ? maxLado / mayor : 1;
-        const width = Math.max(1, Math.round(video.videoWidth * escala));
-        const height = Math.max(1, Math.round(video.videoHeight * escala));
-        canvas.width = width;
-        canvas.height = height;
-        ctx.drawImage(video, 0, 0, width, height);
-        const datos = ctx.getImageData(0, 0, width, height);
-        const texto = decodificarPixeles(datos.data, width, height);
-        if (texto) {
-          const actual = await loteActualDesdeQr(texto);
-          if (!actual.ok) {
-            setError(actual.error);
-            streamRef.current?.getTracks().forEach((pista) => pista.stop());
-            streamRef.current = null;
-            setCamara(false);
-            return;
-          }
-          if (!("lote" in actual)) {
-            setError("Ese QR es de un consumo ya retirado. Escanea el QR del TAG que está en la cava.");
-            streamRef.current?.getTracks().forEach((pista) => pista.stop());
-            streamRef.current = null;
-            setCamara(false);
-            return;
-          }
-          onLeidoRef.current(actual.lote);
-          streamRef.current?.getTracks().forEach((pista) => pista.stop());
-          streamRef.current = null;
-          setCamara(false);
-          return;
-        }
-      }
-      requestAnimationFrame(() => {
-        void tick();
-      });
+    const cerrar = () => {
+      streamRef.current?.getTracks().forEach((pista) => pista.stop());
+      streamRef.current = null;
+      setCamara(false);
     };
 
-    const marco = requestAnimationFrame(tick);
+    const tick = async () => {
+      if (!vivo || ocupado) return;
+      try {
+        if (video.readyState >= 2 && ctx && video.videoWidth > 0) {
+          const lado = Math.round(Math.min(video.videoWidth, video.videoHeight) * 0.72);
+          const sx = Math.round((video.videoWidth - lado) / 2);
+          const sy = Math.round((video.videoHeight - lado) / 2);
+          const maxLado = 1200;
+          const escala = lado > maxLado ? maxLado / lado : 1;
+          const width = Math.max(1, Math.round(lado * escala));
+          canvas.width = width;
+          canvas.height = width;
+          ctx.drawImage(video, sx, sy, lado, lado, 0, 0, width, width);
+          const datos = ctx.getImageData(0, 0, width, width);
+          const texto = decodificarPixeles(datos.data, width, width);
+          const tag = texto ? tagDeLectura(texto) : null;
+          if (texto && /TOKEN:\s*ML/i.test(texto)) {
+            ocupado = true;
+            const actual = await loteActualDesdeQr(texto);
+            if (!vivo) return;
+            if (!actual.ok) {
+              setError(actual.error);
+              cerrar();
+              return;
+            }
+            if (!("lote" in actual)) {
+              setError("Ese QR es de un consumo ya retirado. Escanea el QR del TAG que está en la cava.");
+              cerrar();
+              return;
+            }
+            onLeidoRef.current(actual.lote);
+            cerrar();
+            return;
+          }
+          if (tag) {
+            ocupado = true;
+            const actual = await loteActualDesdeTag(tag);
+            if (!vivo) return;
+            if (!actual.ok) {
+              setError(actual.error);
+              cerrar();
+              return;
+            }
+            onLeidoRef.current(actual.lote);
+            cerrar();
+            return;
+          }
+        }
+      } catch {
+        ocupado = false;
+      }
+      if (vivo && !ocupado) espera = window.setTimeout(() => void tick(), 180);
+    };
+
+    espera = window.setTimeout(() => void tick(), 180);
     return () => {
       vivo = false;
-      cancelAnimationFrame(marco);
+      window.clearTimeout(espera);
     };
   }, [camara]);
 
@@ -101,7 +122,11 @@ export function EscanerSalida({
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
         audio: false,
       });
       streamRef.current = stream;
@@ -287,4 +312,10 @@ export function EscanerSalida({
       ) : null}
     </div>
   );
+}
+
+function tagDeLectura(texto: string) {
+  const marcado = texto.match(/TAG\s*[: ]\s*(\d{4,8})/i)?.[1];
+  if (marcado) return marcado;
+  return texto.trim().match(/^(\d{4,8})$/)?.[1] ?? null;
 }

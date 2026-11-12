@@ -1,3 +1,4 @@
+import { encode } from "uqr";
 import { etiquetaDeLote, lineasEtiqueta, type EtiquetaCava } from "./etiqueta-cava";
 import type { Lote } from "./lotes";
 
@@ -5,7 +6,6 @@ const ANCHO = 456;
 const ALTO = 256;
 const MARGEN = 24;
 const QR_X = 286;
-const QR_Y = 42;
 
 /** ZPL de una etiqueta de 5,7 cm × 3,2 cm a 203 dpi. El texto queda a la izquierda y el QR, más pequeño, a la derecha. */
 export function zplDeEtiqueta(etiqueta: EtiquetaCava, textoDelQr: string) {
@@ -36,7 +36,7 @@ export function zplDeEtiqueta(etiqueta: EtiquetaCava, textoDelQr: string) {
     `^PW${ANCHO}`,
     `^LL${ALTO}`,
     textos,
-    `^FO${QR_X},${QR_Y}^BQN,2,3^FH\\^FDLA,${campoQr(textoDelQr)}^FS`,
+    qrZpl(textoDelQr, QR_X, ALTO),
     "^XZ",
   ].join("\n");
 }
@@ -49,11 +49,32 @@ function campo(valor: string) {
   return valor.replace(/[\^~\\]/g, " ").replace(/[\r\n]/g, " ");
 }
 
-function campoQr(valor: string) {
-  return valor
-    .replace(/_/g, "_5F")
-    .replace(/\^/g, "_5E")
-    .replace(/~/g, "_7E")
-    .replace(/\\/g, "_5C")
-    .replace(/\n/g, "_0A");
+/** Cada módulo mide 3 puntos de ancho, igual que antes, y 4 de alto. */
+function qrZpl(texto: string, x: number, altoEtiqueta: number) {
+  const qr = encode(texto, { ecc: "H", border: 2 });
+  const celdaAncho = 3;
+  const celdaAlto = 4;
+  const alto = qr.size * celdaAlto;
+  const y = Math.max(4, Math.round((altoEtiqueta - alto) / 2));
+  const comandos: string[] = [];
+  for (let fila = 0; fila < qr.size; fila += 1) {
+    let inicio = -1;
+    const cerrar = (hasta: number) => {
+      if (inicio < 0) return;
+      const px = x + inicio * celdaAncho;
+      const py = y + fila * celdaAlto;
+      const ancho = (hasta - inicio) * celdaAncho;
+      comandos.push(`^FO${px},${py}^GB${ancho},${celdaAlto},${celdaAlto + 1}^FS`);
+      inicio = -1;
+    };
+    for (let columna = 0; columna < qr.size; columna += 1) {
+      if (qr.data[fila]?.[columna]) {
+        if (inicio < 0) inicio = columna;
+      } else {
+        cerrar(columna);
+      }
+    }
+    cerrar(qr.size);
+  }
+  return comandos.join("\n");
 }
