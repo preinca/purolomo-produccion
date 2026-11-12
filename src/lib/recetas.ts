@@ -117,11 +117,15 @@ export function interpretarFilasReceta(filas: unknown[][], linea = "1"): Resulta
   const colRango = columnas?.rango ?? -1;
   const producto = limitesDelProducto(indiceEncabezado >= 0 ? datos.slice(0, indiceEncabezado) : [], linea);
   const items: ItemReceta[] = [];
+  let rangoTotal: { minimo: number; maximo: number } | null = null;
 
   for (const fila of cuerpo) {
     const tipo = String(fila[colTipo] ?? "").trim().toUpperCase();
     const kg = Number(String(fila[colKg] ?? "").trim().replace(",", "."));
-    if (tipo === "TOTAL" || tipo === "SUMA") break;
+    if (tipo === "TOTAL" || tipo === "SUMA") {
+      if (colRango >= 0) rangoTotal = rangoDeTexto(fila[colRango]);
+      break;
+    }
     if (!tipo && !Number.isFinite(kg)) continue;
     if (!tipo) return { ok: false, error: "Hay una fila sin el tipo de MPC." };
     if (!productoPorTipo(tipo)) {
@@ -155,36 +159,56 @@ export function interpretarFilasReceta(filas: unknown[][], linea = "1"): Resulta
   }
 
   if (items.length < 1) return { ok: false, error: "La receta no tiene materias primas." };
+  const limites = rangoTotal
+    ? { tolerancia: producto.tolerancia, minimo: rangoTotal.minimo, maximo: rangoTotal.maximo }
+    : producto;
   const total = redondear(items.reduce((suma, item) => suma + item.kg, 0));
-  if (producto.minimo > producto.maximo) {
+  if (limites.minimo > limites.maximo) {
     return { ok: false, error: "El mínimo del pesaje está por encima del máximo." };
   }
-  if (total < producto.minimo || total > producto.maximo) {
+  if (total < limites.minimo || total > limites.maximo) {
     return {
       ok: false,
-      error: `La receta suma ${total} kg. El pesaje de Alibal queda entre ${producto.minimo} y ${producto.maximo} kg.`,
+      error: `La receta suma ${total} kg. El pesaje de Alibal queda entre ${limites.minimo} y ${limites.maximo} kg.`,
     };
   }
   return {
     ok: true,
-    value: { items, toleranciaKg: producto.tolerancia, minimoKg: producto.minimo, maximoKg: producto.maximo },
+    value: { items, toleranciaKg: limites.tolerancia, minimoKg: limites.minimo, maximoKg: limites.maximo },
   };
 }
 
 function limitesDelProducto(filas: unknown[][], linea: string) {
   const defecto = limitesLinea(linea);
   let tolerancia = defecto.tolerancia;
+  let objetivo = defecto.objetivo;
+  let leyoObjetivo = false;
+  let leyoTolerancia = false;
   let minimo: number | null = null;
   let maximo: number | null = null;
   for (const fila of filas) {
     for (let indice = 0; indice < fila.length; indice += 1) {
       const etiqueta = normalizar(fila[indice]);
       const numero = numeroCelda(fila[indice + 1]);
+      if (etiqueta === "objetivo" && numero !== null && numero > 0) {
+        objetivo = numero;
+        leyoObjetivo = true;
+      }
       if (numero === null) continue;
-      if (etiqueta.startsWith("tolerancia") && numero >= 0) tolerancia = numero;
+      if (etiqueta.startsWith("tolerancia") && numero >= 0) {
+        tolerancia = numero;
+        leyoTolerancia = true;
+      }
       if (etiqueta === "minimo") minimo = numero;
       if (etiqueta === "maximo") maximo = numero;
     }
+  }
+  if (leyoObjetivo && leyoTolerancia) {
+    return {
+      tolerancia,
+      minimo: redondear(objetivo - tolerancia),
+      maximo: redondear(objetivo + tolerancia),
+    };
   }
   return {
     tolerancia,
@@ -306,28 +330,61 @@ export async function guardarReceta(db: Db, receta: FilasReceta, linea = "1"): P
   });
 }
 
+const esquemaGlobal = globalThis as { purolomoRecetaVigente?: Promise<void> };
+
+function asegurarRecetaVigente(db: Db) {
+  if (!esquemaGlobal.purolomoRecetaVigente) {
+    esquemaGlobal.purolomoRecetaVigente = prepararRecetaVigente(db).catch((error: unknown) => {
+      esquemaGlobal.purolomoRecetaVigente = undefined;
+      throw error;
+    });
+  }
+  return esquemaGlobal.purolomoRecetaVigente;
+}
+
+async function prepararRecetaVigente(db: Db) {
+  try {
+    await db.get("SELECT vigente FROM recetas LIMIT 1");
+  } catch {
+    await db.exec("ALTER TABLE recetas ADD COLUMN IF NOT EXISTS vigente INTEGER NOT NULL DEFAULT 1");
+  }
+}
+
 export async function eliminarReceta(db: Db, linea: string): Promise<Resultado> {
+  await asegurarRecetaVigente(db);
   if (linea !== "1" && linea !== "2") return { ok: false, error: "Elige la línea 1 o la línea 2." };
+  const enCurso = await db.get<{ numero: number; linea: string }>(
+    "SELECT numero, linea FROM pesajes WHERE destino = ? AND finalizado = 0 ORDER BY id DESC LIMIT 1",
+    ALIBAL_1K.destino,
+  );
+  if (enCurso && String(enCurso.linea) === linea) {
+    return {
+      ok: false,
+      error: `No se puede eliminar la receta de la línea ${linea} porque el pesaje ${enCurso.numero} sigue en curso.`,
+    };
+  }
   const filas = await db.all<{ id: number }>(
-    "SELECT id FROM recetas WHERE destino = ? AND linea = ?",
+    "SELECT id FROM recetas WHERE destino = ? AND linea = ? AND vigente = 1",
     ALIBAL_1K.destino,
     linea,
   );
   if (filas.length === 0) return { ok: false, error: `La línea ${linea} no tiene una receta cargada.` };
   const ids = filas.map((fila) => Number(fila.id));
-  const uso = await db.get<{ n: number }>(
-    "SELECT COUNT(*)::int AS n FROM pesajes WHERE receta_id = ANY(?::int[])",
+  const usadas = await db.all<{ receta_id: number }>(
+    "SELECT DISTINCT receta_id FROM pesajes WHERE receta_id = ANY(?::int[])",
     arregloPg(ids),
   );
-  if (Number(uso?.n ?? 0) > 0) {
-    return {
-      ok: false,
-      error: `No se puede eliminar la receta de la línea ${linea} porque ya hay pesajes hechos con ella.`,
-    };
-  }
+  const usadasIds = new Set(usadas.map((fila) => Number(fila.receta_id)));
+  const libres = ids.filter((id) => !usadasIds.has(id));
+  const conservadas = ids.filter((id) => usadasIds.has(id));
   await db.transaction(async (tx) => {
-    await tx.run("DELETE FROM receta_items WHERE receta_id = ANY(?::int[])", arregloPg(ids));
-    await tx.run("DELETE FROM recetas WHERE id = ANY(?::int[])", arregloPg(ids));
+    if (libres.length > 0) {
+      await tx.run("DELETE FROM receta_items WHERE receta_id = ANY(?::int[])", arregloPg(libres));
+      await tx.run("DELETE FROM recetas WHERE id = ANY(?::int[])", arregloPg(libres));
+    }
+    if (conservadas.length > 0) {
+      await tx.run("UPDATE recetas SET vigente = 0 WHERE id = ANY(?::int[])", arregloPg(conservadas));
+    }
   });
   return { ok: true, value: undefined };
 }
@@ -383,9 +440,10 @@ async function itemsDeRecetas(db: Db, ids: number[]) {
 }
 
 export async function recetaVigente(db: Db, linea = "1", destino: string = ALIBAL_1K.destino): Promise<Receta | null> {
+  await asegurarRecetaVigente(db);
   const lineaBuscada = linea === "2" ? "2" : "1";
   const fila = await db.get<Record<string, unknown>>(
-    "SELECT * FROM recetas WHERE destino = ? AND linea = ? ORDER BY id DESC LIMIT 1",
+    "SELECT * FROM recetas WHERE destino = ? AND linea = ? AND vigente = 1 ORDER BY id DESC LIMIT 1",
     destino,
     lineaBuscada,
   );
@@ -395,10 +453,11 @@ export async function recetaVigente(db: Db, linea = "1", destino: string = ALIBA
 }
 
 export async function recetasCargadas(db: Db) {
+  await asegurarRecetaVigente(db);
   const filas = await db.all<Record<string, unknown>>(
     `SELECT r.* FROM recetas r
      INNER JOIN (
-       SELECT destino, linea, MAX(id) AS id FROM recetas GROUP BY destino, linea
+       SELECT destino, linea, MAX(id) AS id FROM recetas WHERE vigente = 1 GROUP BY destino, linea
      ) ultima ON ultima.id = r.id
      ORDER BY r.destino, r.linea`,
   );

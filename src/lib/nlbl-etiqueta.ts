@@ -48,13 +48,23 @@ function ajustarPlantilla(xml: string) {
 
 function objetos(etiqueta: EtiquetaCava, textoDelQr: string) {
   const lineas = lineasEtiqueta(etiqueta);
-  const lado = 30000;
-  const izquierda = ANCHO - lado - 600;
-  const columna = izquierda - 900;
-  const paso = Math.floor((ALTO - 600) / lineas.length);
+  const lado = 21000;
+  const izquierda = ANCHO - lado - 1200;
+  const columna = izquierda - 800;
+  const margen = 2400;
+  const usable = ALTO - margen * 2;
+  const unidades = 1.7 + Math.max(lineas.length - 1, 1);
+  const paso = Math.floor(usable / unidades);
   const masLarga = Math.max(...lineas.map((linea) => linea.length), 1);
-  const escala = Math.max(48, Math.min(Math.round(paso / 26), Math.floor(columna / (masLarga * 15)), 160));
-  const textos = lineas.map((linea, indice) => texto(linea, 400, 200 + indice * paso, escala, 10010 + indice));
+  const escalaCuerpo = Math.max(40, Math.min(Math.round(paso / 26), Math.floor(columna / (masLarga * 15)), 140));
+  const escalaTag = Math.min(200, Math.round(escalaCuerpo * 1.55));
+  let y = margen;
+  const textos = lineas.map((linea, indice) => {
+    const escala = indice === 0 ? escalaTag : escalaCuerpo;
+    const comando = texto(linea, 500, y, escala, 10010 + indice);
+    y += indice === 0 ? Math.round(paso * 1.7) : paso;
+    return comando;
+  });
   return [...textos, qr(textoDelQr, lado, izquierda, Math.round((ALTO - lado) / 2))].join("\n");
 }
 

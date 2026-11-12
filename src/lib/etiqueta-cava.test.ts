@@ -3,6 +3,7 @@ import test from "node:test";
 import { etiquetaDeLote } from "./etiqueta-cava.ts";
 import type { Lote } from "./lotes.ts";
 import { nlblDeEtiqueta, solucionDeEtiqueta, xmlDeEtiqueta } from "./nlbl-etiqueta.ts";
+import { pdfDeEtiqueta, tagDePdfEtiqueta } from "./pdf-etiqueta.ts";
 import { textoQr } from "./qr.ts";
 
 const lote: Lote = {
@@ -10,7 +11,7 @@ const lote: Lote = {
   fecha: "2026-11-05",
   semana: "SEMANA 45",
   codigo: "MPCM01042",
-  producto: "CDM SP CH",
+  producto: "CDM SP CH INTERNO",
   kgRecibidos: 756,
   kgDespachados: 0,
   kgConsumidos: 0,
@@ -24,7 +25,7 @@ test("la etiqueta usa la fecha, la hora de Caracas y el catálogo", () => {
   const etiqueta = etiquetaDeLote(lote);
   assert.equal(etiqueta.fecha, "05/11/2026");
   assert.equal(etiqueta.hora, "13:52:08");
-  assert.equal(etiqueta.producto, "CDM SP CH");
+  assert.equal(etiqueta.producto, "CDM SP CH INTERNO");
   assert.equal(etiqueta.descripcion, "Carapacho de pollo");
   assert.equal(etiqueta.tipo, "CH");
   assert.equal(etiqueta.codigo, "MPCM01042");
@@ -55,4 +56,16 @@ test("el nlbl de la etiqueta usa la plantilla de Zebra y los datos del lote", ()
   assert.match(xml, /13:52:08/);
   assert.match(xml, /BarcodeDocumentItem/);
   assert.equal(xml.includes("CODIGO 22"), false);
+});
+
+test("el pdf de la etiqueta mide 5,7 por 3,2 cm y lleva el texto a la izquierda", () => {
+  const etiqueta = etiquetaDeLote(lote);
+  const pdf = pdfDeEtiqueta(etiqueta, textoQr(lote)).toString("latin1");
+  assert.match(pdf, /^%PDF-1\.4/);
+  assert.match(pdf, /MediaBox \[0 0 161\.57 90\.71\]/);
+  assert.match(pdf, /TAG 400123/);
+  assert.match(pdf, /CDM SP CH/);
+  assert.match(pdf, /756 kg/);
+  assert.equal(pdf.includes("CODIGO 22"), false);
+  assert.equal(tagDePdfEtiqueta(pdfDeEtiqueta(etiqueta, textoQr(lote))), "400123");
 });

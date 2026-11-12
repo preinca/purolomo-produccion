@@ -205,6 +205,14 @@ export async function insertarRecepcion(db: Db, nuevo: NuevoLote): Promise<Resul
   return { ok: true, value: lote };
 }
 
+export async function listarLotesDeProceso(db: Db, procesoId: number) {
+  const rows = await db.all<SqlRow>(
+    "SELECT * FROM lotes WHERE proceso_id = ? ORDER BY creado_en, tag",
+    procesoId,
+  );
+  return rows.map(filaLote);
+}
+
 export async function listarLotesPorRecepcion(db: Db, limite = 1000) {
   const tope = Math.min(Math.max(limite, 1), 2000);
   const rows = await db.all<SqlRow>("SELECT * FROM lotes ORDER BY creado_en DESC, tag DESC LIMIT ?", tope);

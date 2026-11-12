@@ -3,10 +3,10 @@ import test from "node:test";
 import { basePrueba } from "./db-prueba.ts";
 import { buscarLote, insertarRecepcion } from "./lotes.ts";
 import { sufijoDeMiniLote, tokenDeSecuencia } from "./minilote.ts";
-import { abrirPesaje, aportesDelTipo, buscarMiniLote, buscarPesajePorCodigo, codigoDePesaje, codigoDelPesaje, consumirEnPesaje, existenciasDeTipos, planillaDeProducto, quitarKgDePesaje, retirosDeTag, tagsDelTipo } from "./pesajes.ts";
+import { abrirPesaje, aportesDelTipo, buscarMiniLote, buscarPesaje, buscarPesajePorCodigo, codigoDePesaje, codigoDelPesaje, consumirEnPesaje, eliminarPesajeEnCurso, existenciasDeTipos, planillaDeProducto, quitarKgDePesaje, retirosDeTag, tagsDelTipo } from "./pesajes.ts";
 import { leerConsumoQr, textoQr, textoQrMiniLote } from "./qr.ts";
 import { excelDeReceta } from "./excel-receta.ts";
-import { guardarReceta, interpretarFilasReceta, leerRecetaExcel } from "./recetas.ts";
+import { guardarReceta, eliminarReceta, interpretarFilasReceta, leerRecetaExcel, recetaVigente } from "./recetas.ts";
 
 test("acepta una receta de Alibal 1 kg entre 725 y 755 kg", () => {
   const valida = interpretarFilasReceta([
@@ -72,7 +72,125 @@ test("el excel descargado de la receta se puede volver a cargar", async () => {
   const leida = leerRecetaExcel(archivo, "1");
   assert.equal(leida.ok, true);
   if (!leida.ok) return;
-  assert.deepEqual(leida.value, receta.value);
+  assert.equal(leida.value.minimoKg, 725);
+  assert.equal(leida.value.maximoKg, 755);
+  assert.deepEqual(
+    leida.value.items.map((item) => [item.tipo, item.kg, item.tolerancia, item.minimo, item.maximo]),
+    [
+      ["GL", 340, 20, 320, 360],
+      ["CH", 240, 20, 220, 260],
+      ["CHEXT", 150, 20, 130, 170],
+    ],
+  );
+});
+
+test("la fórmula usa el rango de cada producto y rechaza los kilos que se salen", () => {
+  const fuera = interpretarFilasReceta([
+    ["Producto", "ALIBAL 1 K", "Línea", "1", "Objetivo", 740],
+    ["Tolerancia del pesaje", 50, "Mínimo", 675, "Máximo", 790],
+    ["Tipo", "Kg", "Tolerancia", "Rango"],
+    ["GL", 315, 50, "315 a 365 kg"],
+    ["CH", 215, 50, "215 a 265 kg"],
+    ["CHEXT", 145, 50, "145 a 195 kg"],
+    ["TOTAL", 675, 50, "690 a 790 kg"],
+  ]);
+  assert.equal(fuera.ok, false);
+  if (fuera.ok) return;
+  assert.match(fuera.error, /690/);
+  assert.match(fuera.error, /790/);
+
+  const dentro = interpretarFilasReceta([
+    ["Producto", "ALIBAL 1 K", "Línea", "1", "Objetivo", 740],
+    ["Tolerancia del pesaje", 50, "Mínimo", 675, "Máximo", 790],
+    ["Tipo", "Kg", "Tolerancia", "Rango"],
+    ["GL", 340, 50, "315 a 365 kg"],
+    ["CH", 240, 50, "215 a 265 kg"],
+    ["CHEXT", 160, 50, "145 a 195 kg"],
+    ["TOTAL", 740, 50, "690 a 790 kg"],
+  ]);
+  assert.equal(dentro.ok, true);
+  if (!dentro.ok) return;
+  assert.equal(dentro.value.minimoKg, 690);
+  assert.equal(dentro.value.maximoKg, 790);
+  assert.deepEqual(
+    dentro.value.items.map((item) => [item.tipo, item.minimo, item.maximo]),
+    [
+      ["GL", 315, 365],
+      ["CH", 215, 265],
+      ["CHEXT", 145, 195],
+    ],
+  );
+});
+
+test("no carga kilos de salida fuera del rango de la fórmula", async () => {
+  const db = await basePrueba();
+  const receta = interpretarFilasReceta([
+    ["Producto", "ALIBAL 1 K", "Línea", "1", "Objetivo", 740],
+    ["Tolerancia del pesaje", 50],
+    ["Tipo", "Kg", "Tolerancia", "Rango"],
+    ["GL", 340, 50, "315 a 365 kg"],
+    ["CH", 240, 50, "215 a 265 kg"],
+    ["CHEXT", 160, 50, "145 a 195 kg"],
+    ["TOTAL", 740, 50, "690 a 790 kg"],
+  ]);
+  assert.equal(receta.ok, true);
+  if (!receta.ok) return;
+  await guardarReceta(db, receta.value);
+  assert.equal(
+    (await insertarRecepcion(db, { fecha: "2026-11-12", tag: "5000101", codigo: "MPCM01045", kgRecibidos: 1000 })).ok,
+    true,
+  );
+  const pesaje = await abrirPesaje(db, { fecha: "2026-11-12", numero: 1, linea: "1" });
+  assert.equal(pesaje.ok, true);
+  if (!pesaje.ok) return;
+
+  const bajo = await consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000101", kg: 100 });
+  assert.equal(bajo.ok, false);
+  const alto = await consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000101", kg: 400 });
+  assert.equal(alto.ok, false);
+  const justo = await consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000101", kg: 340 });
+  assert.equal(justo.ok, true);
+
+  const eliminado = await eliminarPesajeEnCurso(db, pesaje.value.id);
+  assert.equal(eliminado.ok, true);
+  assert.equal(await buscarPesaje(db, pesaje.value.id), null);
+  assert.equal((await buscarLote(db, "5000101"))?.kgDespachados, 0);
+  assert.equal((await db.get("SELECT token FROM minilotes WHERE pesaje_id = ?", pesaje.value.id)), undefined);
+
+  const otra = await eliminarPesajeEnCurso(db, pesaje.value.id);
+  assert.equal(otra.ok, false);
+});
+
+test("un tag corto entrega todo y el siguiente completa el promedio sin que el rango lo frene", async () => {
+  const db = await basePrueba();
+  const receta = interpretarFilasReceta([
+    ["Producto", "ALIBAL 1 K", "Línea", "1", "Objetivo", 300],
+    ["Tolerancia del pesaje", 20],
+    ["Tipo", "Kg", "Tolerancia", "Rango"],
+    ["GL", 300, 20, "280 a 320 kg"],
+    ["TOTAL", 300, 20, "280 a 320 kg"],
+  ]);
+  assert.equal(receta.ok, true);
+  if (!receta.ok) return;
+  await guardarReceta(db, receta.value);
+  assert.equal(
+    (await insertarRecepcion(db, { fecha: "2026-11-12", tag: "5000201", codigo: "MPCM01045", kgRecibidos: 200 })).ok,
+    true,
+  );
+  assert.equal(
+    (await insertarRecepcion(db, { fecha: "2026-11-12", tag: "5000202", codigo: "MPCM01045", kgRecibidos: 1000 })).ok,
+    true,
+  );
+  const pesaje = await abrirPesaje(db, { fecha: "2026-11-12", numero: 3, linea: "1" });
+  assert.equal(pesaje.ok, true);
+  if (!pesaje.ok) return;
+
+  const corto = await consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000201", kg: 200 });
+  assert.equal(corto.ok, true);
+  const resto = await consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000202", kg: 100 });
+  assert.equal(resto.ok, true);
+  const deMas = await consumirEnPesaje(db, { pesajeId: pesaje.value.id, tag: "5000202", kg: 50 });
+  assert.equal(deMas.ok, false);
 });
 
 test("un pesaje junta dos tags del mismo MPC y rechaza lo que no está en la receta", async () => {
@@ -87,7 +205,7 @@ test("un pesaje junta dos tags del mismo MPC y rechaza lo que no está en la rec
   await guardarReceta(db, receta.value);
 
   assert.equal(
-    (await insertarRecepcion(db, { fecha: "2026-10-29", tag: "5000001", codigo: "MPCM01045", kgRecibidos: 1000 })).ok,
+    (await insertarRecepcion(db, { fecha: "2026-10-29", tag: "5000001", codigo: "MPCM01045", kgRecibidos: 200 })).ok,
     true,
   );
   assert.equal(
@@ -153,7 +271,7 @@ test("un pesaje junta dos tags del mismo MPC y rechaza lo que no está en la rec
   assert.equal(await buscarPesajePorCodigo(db, "GLML999999-340"), null);
   assert.equal((await buscarMiniLote(db, primero.value.token.slice(2)))?.token, primero.value.token);
   const cava = await existenciasDeTipos(db, ["GL"]);
-  assert.ok(cava.some((item) => item.tag === "5000001" && item.kg === 800));
+  assert.equal((await existenciasDeTipos(db, ["GL"])).find((item) => item.tag === "5000001"), undefined);
   assert.ok(cava.some((item) => item.tag === "5000002" && item.kg === 860));
   const texto = textoQrMiniLote({
     token: segundo.value.token,
@@ -179,5 +297,35 @@ test("un pesaje junta dos tags del mismo MPC y rechaza lo que no está en la rec
   assert.equal(quitado.ok, true);
   assert.equal((await buscarLote(db, "5000001"))?.kgDespachados, 0);
   assert.equal((await aportesDelTipo(db, pesaje.value.id, "GL")).some((aporte) => aporte.token === primero.value.token), false);
-  assert.equal((await existenciasDeTipos(db, ["GL"])).find((item) => item.tag === "5000001")?.kg, 1000);
+  assert.equal((await existenciasDeTipos(db, ["GL"])).find((item) => item.tag === "5000001")?.kg, 200);
+});
+
+test("no elimina la receta mientras su pesaje sigue en curso", async () => {
+  const db = await basePrueba();
+  const receta = interpretarFilasReceta([
+    ["Tipo", "Kg"],
+    ["GL", "340"],
+    ["CH", "240"],
+    ["CHEXT", "160"],
+  ]);
+  assert.equal(receta.ok, true);
+  if (!receta.ok) return;
+  await guardarReceta(db, receta.value);
+  const pesaje = await abrirPesaje(db, { fecha: "2026-11-12", numero: 1, linea: "1" });
+  assert.equal(pesaje.ok, true);
+  if (!pesaje.ok) return;
+
+  const bloqueada = await eliminarReceta(db, "1");
+  assert.equal(bloqueada.ok, false);
+  assert.ok(await recetaVigente(db, "1"));
+
+  await db.run("UPDATE pesajes SET finalizado = 1 WHERE id = ?", pesaje.value.id);
+  const quitada = await eliminarReceta(db, "1");
+  assert.equal(quitada.ok, true);
+  assert.equal(await recetaVigente(db, "1"), null);
+  const guardada = await db.get<{ n: number }>(
+    "SELECT COUNT(*)::int AS n FROM receta_items WHERE receta_id = ?",
+    pesaje.value.recetaId,
+  );
+  assert.ok(Number(guardada?.n ?? 0) > 0);
 });

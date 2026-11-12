@@ -1,14 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { loteActualDesdeQr, type LoteLeido } from "@/app/actions";
+import { loteActualDesdeQr, loteActualDesdeTag, type LoteLeido } from "@/app/actions";
 import {
   cargarImagen,
   decodificarImagen,
   decodificarPixeles,
 } from "@/components/decodificar-imagen-qr";
+import { tagDePdfEtiqueta } from "@/lib/pdf-etiqueta";
 
-export function EscanerSalida({ onLeido }: { onLeido: (lectura: LoteLeido) => void }) {
+export function EscanerSalida({
+  onLeido,
+  camaraGrande = false,
+}: {
+  onLeido: (lectura: LoteLeido) => void;
+  camaraGrande?: boolean;
+}) {
   const [error, setError] = useState<string | null>(null);
   const [leyendo, setLeyendo] = useState(false);
   const [camara, setCamara] = useState(false);
@@ -134,12 +141,95 @@ export function EscanerSalida({ onLeido }: { onLeido: (lectura: LoteLeido) => vo
     }
   }
 
+  async function leerPdf(archivo: File | undefined) {
+    if (!archivo) return;
+    setLeyendo(true);
+    setError(null);
+    try {
+      const datos = new Uint8Array(await archivo.arrayBuffer());
+      const cabecera = new TextDecoder("latin1").decode(datos.subarray(0, 5));
+      if (!cabecera.startsWith("%PDF")) {
+        setError("Elige el PDF de la etiqueta.");
+        return;
+      }
+      const tag = tagDePdfEtiqueta(datos);
+      if (!tag) {
+        setError("Ese PDF no tiene el TAG de una etiqueta de cava.");
+        return;
+      }
+      const actual = await loteActualDesdeTag(tag);
+      if (!actual.ok) {
+        setError(actual.error);
+        return;
+      }
+      onLeido(actual.lote);
+    } catch {
+      setError("No se pudo leer ese PDF.");
+    } finally {
+      setLeyendo(false);
+    }
+  }
+
   return (
-    <div className="grid gap-2 rounded-lg border border-dashed px-3 py-3">
+    <div className={camaraGrande ? "grid gap-2" : "grid gap-2 rounded-lg border border-dashed px-3 py-3"}>
+      <div className={camaraGrande ? "rounded-lg border border-dashed px-3 py-3" : undefined}>
       <p className="text-sm font-medium">Escanear el QR del TAG</p>
       <p className="text-xs text-muted-foreground">
-        Usa el mismo QR de la recepción, o escribe el número de TAG en el campo de abajo. En los dos casos se carga la información del lote.
+        Usa el mismo QR de la recepción, carga el PDF de la etiqueta, o escribe el número de TAG en el campo de abajo.
       </p>
+      </div>
+      {camaraGrande ? (
+        <div className="mt-4 grid gap-4">
+          <button
+            type="button"
+            onClick={() => void abrirCamara()}
+            className="inline-flex h-16 w-full items-center justify-center rounded-xl bg-blue-600 px-6 text-lg font-semibold text-white hover:bg-blue-700 sm:h-14 sm:text-base"
+          >
+            Escanear con cámara
+          </button>
+          {camara ? (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={detenerCamara}
+                className="inline-flex h-11 items-center rounded-lg border border-border px-4 text-sm"
+              >
+                Cerrar cámara
+              </button>
+            </div>
+          ) : null}
+          <div className="grid grid-cols-2 gap-3">
+            <label className="inline-flex h-11 w-full cursor-pointer items-center justify-center rounded-lg bg-amber-500 px-3 text-center text-sm font-semibold text-white hover:bg-amber-600">
+              {leyendo ? "Leyendo…" : "Cargar imagen de QR"}
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                disabled={leyendo}
+                onChange={(event) => {
+                  const archivo = event.target.files?.[0];
+                  event.target.value = "";
+                  void leerArchivo(archivo);
+                }}
+              />
+            </label>
+            <label className="inline-flex h-11 w-full cursor-pointer items-center justify-center rounded-lg bg-[#7B4B2A] px-3 text-center text-sm font-semibold text-white hover:bg-[#633C22]">
+              {leyendo ? "Leyendo…" : "Cargar etiqueta PDF"}
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                className="sr-only"
+                disabled={leyendo}
+                onChange={(event) => {
+                  const archivo = event.target.files?.[0];
+                  event.target.value = "";
+                  void leerPdf(archivo);
+                }}
+              />
+            </label>
+          </div>
+        </div>
+      ) : (
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -148,7 +238,7 @@ export function EscanerSalida({ onLeido }: { onLeido: (lectura: LoteLeido) => vo
         >
           Escanear con cámara
         </button>
-        <label className="inline-flex h-8 cursor-pointer items-center rounded-lg border border-border bg-background px-2.5 text-sm font-medium hover:bg-muted">
+        <label className="inline-flex h-8 cursor-pointer items-center rounded-lg bg-amber-500 px-2.5 text-sm font-medium text-white hover:bg-amber-600">
           {leyendo ? "Leyendo…" : "Cargar imagen de QR"}
           <input
             type="file"
@@ -162,6 +252,20 @@ export function EscanerSalida({ onLeido }: { onLeido: (lectura: LoteLeido) => vo
             }}
           />
         </label>
+        <label className="inline-flex h-8 cursor-pointer items-center rounded-lg bg-[#7B4B2A] px-2.5 text-sm font-medium text-white hover:bg-[#633C22]">
+          {leyendo ? "Leyendo…" : "Cargar etiqueta PDF"}
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            className="sr-only"
+            disabled={leyendo}
+            onChange={(event) => {
+              const archivo = event.target.files?.[0];
+              event.target.value = "";
+              void leerPdf(archivo);
+            }}
+          />
+        </label>
         {camara ? (
           <button
             type="button"
@@ -172,6 +276,7 @@ export function EscanerSalida({ onLeido }: { onLeido: (lectura: LoteLeido) => vo
           </button>
         ) : null}
       </div>
+      )}
       {camara ? (
         <video ref={videoRef} muted playsInline className="max-h-48 w-full rounded-lg bg-black object-cover" />
       ) : null}

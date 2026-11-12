@@ -8,6 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDb } from "@/lib/db";
 import { formatoKg } from "@/lib/formato";
+import { pesajeEnCurso } from "@/lib/pesajes";
 import { recetasCargadas } from "@/lib/recetas";
 
 export default function Page({ searchParams }: PageProps<"/receta">) {
@@ -31,7 +32,8 @@ async function Receta({
   await connection();
   const parametros = await searchParams;
   const alerta = leer(parametros.alerta);
-  const recetas = await recetasCargadas(getDb());
+  const db = getDb();
+  const [recetas, enCurso] = await Promise.all([recetasCargadas(db), pesajeEnCurso(db)]);
 
   return (
     <div className="grid items-start gap-8 xl:grid-cols-2">
@@ -80,7 +82,12 @@ async function Receta({
                   >
                     Descargar Excel
                   </a>
-                  <form action={eliminarRecetaFormulario} className="flex flex-wrap items-center gap-3">
+                  {enCurso && enCurso.linea === receta.linea ? (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      No se puede eliminar mientras el pesaje {enCurso.numero} de esta línea sigue en curso.
+                    </p>
+                  ) : (
+                  <form action={eliminarRecetaFormulario} className="mt-2 flex flex-wrap items-center gap-3">
                     <input type="hidden" name="linea" value={receta.linea} />
                     <label className="flex items-center gap-2">
                       <input type="checkbox" name="confirmar" value="si" required className="size-4" />
@@ -90,6 +97,7 @@ async function Receta({
                       Eliminar receta
                     </button>
                   </form>
+                  )}
                 </div>
               </section>
             ))

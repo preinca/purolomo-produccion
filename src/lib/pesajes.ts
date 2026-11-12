@@ -1,7 +1,7 @@
 import { arregloPg } from "./arreglo-pg";
 import type { Db } from "./db";
 import { fechaValida, formatoHora, formatoKg } from "./formato";
-import { registrarDespacho, type Resultado } from "./lotes";
+import { registrarDespacho, kgDisponiblesDe, type Resultado } from "./lotes";
 import { normalizarToken, sufijoDeMiniLote } from "./minilote";
 import { PRODUCTOS_MPC, productoPorCodigo } from "./mpc";
 import type { RetiroEnQr } from "./qr";
@@ -428,11 +428,14 @@ export async function consumirEnPesaje(
   const [items, limites, lote] = await Promise.all([
     itemsDePesaje(db, pesaje),
     limitesDeReceta(db, pesaje.recetaId),
-    db.get<{ codigo: string }>("SELECT codigo FROM lotes WHERE tag = ?", input.tag.trim()),
+    db.get<{ codigo: string; kg_recibidos: number; kg_despachados: number; kg_consumidos: number }>(
+      "SELECT codigo, kg_recibidos, kg_despachados, kg_consumidos FROM lotes WHERE tag = ?",
+      input.tag.trim(),
+    ),
   ]);
   const meta = metaLinea(pesaje.linea, items, limites);
   const loteTipo = lote ? (productoPorCodigo(lote.codigo)?.tipo ?? null) : null;
-  if (!loteTipo) return { ok: false, error: "No existe ese TAG en la cava." };
+  if (!lote || !loteTipo) return { ok: false, error: "No existe ese TAG en la cava." };
   const partida = meta.items.find((item) => item.tipo === loteTipo);
   if (!partida) {
     return {
@@ -452,16 +455,30 @@ export async function consumirEnPesaje(
   const proyectadoTotal = redondear(usadoTotal + kg);
   const topeTipo = partida.maximo;
   const topeTotal = meta.maximo;
+  const disponibles = kgDisponiblesDe({
+    kgRecibidos: Number(lote.kg_recibidos),
+    kgDespachados: Number(lote.kg_despachados),
+    kgConsumidos: Number(lote.kg_consumidos),
+  });
+  const faltaMinimo = Math.max(0, redondear(partida.minimo - usadoTipo));
+  const faltaPromedio = Math.max(0, redondear(partida.kg - usadoTipo));
+  const tagAlcanza = disponibles + 0.001 >= faltaMinimo;
+  const completaPromedio =
+    proyectadoTipo <= partida.kg + 0.001 &&
+    (Math.abs(kg - disponibles) < 0.001 || Math.abs(kg - faltaPromedio) < 0.001);
+  if (
+    !completaPromedio &&
+    (proyectadoTipo > topeTipo + 0.001 || (proyectadoTipo + 0.001 < partida.minimo && tagAlcanza))
+  ) {
+    return {
+      ok: false,
+      error: `${loteTipo} opera de ${formatoKg(partida.minimo)} a ${formatoKg(topeTipo)}. Esos ${formatoKg(kg)} kg lo dejarían en ${formatoKg(proyectadoTipo)}, fuera del rango.`,
+    };
+  }
   if (proyectadoTotal > topeTotal + 0.001) {
     return {
       ok: false,
       error: `El pesaje de Alibal admite hasta ${formatoKg(topeTotal)}. Ya van ${formatoKg(usadoTotal)} y esta salida lo dejaría en ${formatoKg(proyectadoTotal)}.`,
-    };
-  }
-  if (proyectadoTipo > topeTipo + 0.001) {
-    return {
-      ok: false,
-      error: `${loteTipo} opera de ${formatoKg(partida.minimo)} a ${formatoKg(topeTipo)}. Ya van ${formatoKg(usadoTipo)} y esta salida lo dejaría en ${formatoKg(proyectadoTipo)}.`,
     };
   }
 
@@ -514,6 +531,44 @@ export async function quitarKgDePesaje(
     if (movimiento) await tx.run("DELETE FROM movimientos WHERE id = ?", movimiento.id);
     await tx.run("DELETE FROM minilotes WHERE token = ?", token);
     return { ok: true, value: { tag } };
+  });
+}
+
+export async function eliminarPesajeEnCurso(db: Db, pesajeId: number): Promise<Resultado<string[]>> {
+  const pesaje = await buscarPesaje(db, pesajeId);
+  if (!pesaje) return { ok: false, error: "Ese pesaje no existe." };
+  if (pesaje.finalizado) return { ok: false, error: "Este pesaje ya fue finalizado. No se puede eliminar." };
+  return db.transaction(async (tx) => {
+    const minis = await tx.all<{ token: string; tag: string; kg: number; destino: string; linea: string }>(
+      "SELECT token, tag, kg, destino, linea FROM minilotes WHERE pesaje_id = ? FOR UPDATE",
+      pesaje.id,
+    );
+    const tags: string[] = [];
+    for (const mini of minis) {
+      const tag = String(mini.tag);
+      const kg = Number(mini.kg);
+      const lote = await tx.get<{ kg_despachados: number }>(
+        "SELECT kg_despachados FROM lotes WHERE tag = ? FOR UPDATE",
+        tag,
+      );
+      if (!lote) return { ok: false, error: `No existe el TAG ${tag} de ese registro.` };
+      const despachados = Math.max(0, redondear(Number(lote.kg_despachados) - kg));
+      const movimiento = await tx.get<{ id: number }>(
+        `SELECT id FROM movimientos
+         WHERE tag = ? AND tipo = 'despacho' AND destino = ? AND linea = ? AND ABS(kg - ?::double precision) < 0.001
+         ORDER BY id DESC LIMIT 1`,
+        tag,
+        String(mini.destino),
+        String(mini.linea),
+        kg,
+      );
+      await tx.run("UPDATE lotes SET kg_despachados = ? WHERE tag = ?", despachados, tag);
+      if (movimiento) await tx.run("DELETE FROM movimientos WHERE id = ?", movimiento.id);
+      tags.push(tag);
+    }
+    await tx.run("DELETE FROM minilotes WHERE pesaje_id = ?", pesaje.id);
+    await tx.run("DELETE FROM pesajes WHERE id = ? AND finalizado = 0", pesaje.id);
+    return { ok: true, value: tags };
   });
 }
 

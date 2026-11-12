@@ -1,6 +1,6 @@
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { enlaceNlbl, EtiquetaCava } from "@/components/etiqueta-cava";
+import { enlaceNlbl, enlacePdf, EtiquetaCava } from "@/components/etiqueta-cava";
 import { PageFrame } from "@/components/page-frame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -23,7 +23,7 @@ export default function Page({
   return (
     <PageFrame
       titulo="Etiquetas en Cava"
-      descripcion="Historial de las etiquetas que se generan al registrar cada entrada. Se descargan en NLBL de Zebra Designer 3.3, de 5,7 cm × 3,2 cm."
+      descripcion="Historial de las etiquetas que se generan al registrar cada entrada. Se descargan en NLBL de Zebra Designer 3.3 o en PDF, de 5,7 cm × 3,2 cm."
     >
       <Suspense fallback={<p className="text-sm text-muted-foreground">Cargando etiquetas…</p>}>
         <Historial searchParams={searchParams} />
@@ -51,13 +51,22 @@ async function Historial({
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Etiqueta {visible.tag}</CardTitle>
-            <a
-              href={enlaceNlbl(visible.tag)}
-              download={`etiqueta-${visible.tag}.nlbl`}
-              className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/80 sm:w-auto"
-            >
-              Descargar NLBL
-            </a>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <a
+                href={enlaceNlbl(visible.tag)}
+                download={`etiqueta-${visible.tag}.nlbl`}
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/80"
+              >
+                Descargar NLBL
+              </a>
+              <a
+                href={enlacePdf(visible.tag)}
+                download={`etiqueta-${visible.tag}.pdf`}
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-blue-600 px-4 text-sm font-medium text-blue-700 hover:bg-blue-50"
+              >
+                Descargar PDF
+              </a>
+            </div>
           </CardHeader>
           <CardContent>
             <EtiquetaCava lote={visible} />
@@ -87,6 +96,7 @@ async function Historial({
                   <div className="flex gap-4">
                     <a href={`/etiquetas?tag=${etiqueta.tag}`} className="font-medium underline">Ver</a>
                     <a href={enlaceNlbl(etiqueta.tag)} download={`etiqueta-${etiqueta.tag}.nlbl`} className="font-medium underline">NLBL</a>
+                    <a href={enlacePdf(etiqueta.tag)} download={`etiqueta-${etiqueta.tag}.pdf`} className="font-medium underline">PDF</a>
                   </div>
                 </article>
               );
@@ -126,12 +136,17 @@ async function Historial({
                       </TableCell>
                       <TableCell className="font-mono text-xs">{etiqueta.codigo}</TableCell>
                       <TableCell className="text-right">
-                        <a href={`/etiquetas?tag=${etiqueta.tag}`} className="mr-3 text-sm font-medium underline">
-                          Ver
-                        </a>
-                        <a href={enlaceNlbl(etiqueta.tag)} download={`etiqueta-${etiqueta.tag}.nlbl`} className="text-sm font-medium underline">
-                          NLBL
-                        </a>
+                        <div className="flex justify-end gap-4">
+                          <a href={`/etiquetas?tag=${etiqueta.tag}`} className="text-sm font-medium underline">
+                            Ver
+                          </a>
+                          <a href={enlaceNlbl(etiqueta.tag)} download={`etiqueta-${etiqueta.tag}.nlbl`} className="text-sm font-medium underline">
+                            NLBL
+                          </a>
+                          <a href={enlacePdf(etiqueta.tag)} download={`etiqueta-${etiqueta.tag}.pdf`} className="text-sm font-medium underline">
+                            PDF
+                          </a>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { crearRecepcion, type EstadoFormulario } from "@/app/actions";
+import { useActionState, useEffect, useState } from "react";
+import { crearRecepcion, revisarTagEntrada, type EstadoFormulario } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,7 +36,7 @@ export function EntradaForm({
         pendiente={pendiente}
       />
       {estado?.error ? (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="rounded-xl border border-red-300 bg-red-50 px-5 py-5 text-lg font-semibold leading-snug text-red-950">
           {estado.error}
         </p>
       ) : null}
@@ -65,10 +65,41 @@ function Campos({
   pendiente: boolean;
 }) {
   const [codigo, setCodigo] = useState("");
+  const [tag, setTag] = useState(tagSugerido);
+  const [ocupado, setOcupado] = useState<string | null>(null);
   const elegido = productos.find((p) => p.codigo === codigo) ?? null;
 
+  useEffect(() => {
+    const limpio = tag.trim();
+    if (!/^\d{4,8}$/.test(limpio)) {
+      setOcupado(null);
+      return;
+    }
+    let vigente = true;
+    const espera = setTimeout(() => {
+      void revisarTagEntrada(limpio).then((aviso) => {
+        if (vigente) setOcupado(aviso);
+      });
+    }, 300);
+    return () => {
+      vigente = false;
+      clearTimeout(espera);
+    };
+  }, [tag]);
+
   return (
-    <form action={accion} className="grid gap-4">
+    <form
+      action={accion}
+      className="grid gap-4"
+      onSubmit={(event) => {
+        if (ocupado) event.preventDefault();
+      }}
+    >
+      {ocupado ? (
+        <p role="alert" className="rounded-xl border border-red-300 bg-red-50 px-5 py-5 text-lg font-semibold leading-snug text-red-950">
+          {ocupado}
+        </p>
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Campo label="Fecha" htmlFor="fecha">
           <Input id="fecha" name="fecha" type="date" required defaultValue={hoy} />
@@ -92,7 +123,8 @@ function Campos({
             name="tag"
             required
             inputMode="numeric"
-            defaultValue={tagSugerido}
+            value={tag}
+            onChange={(event) => setTag(event.target.value)}
             placeholder="Número de paleta"
           />
         </Campo>
@@ -143,7 +175,7 @@ function Campos({
           placeholder="Remisión, proveedor o novedad de la recepción"
         />
       </Campo>
-      <Button type="submit" size="lg" disabled={pendiente} className="w-full sm:w-auto">
+      <Button type="submit" size="lg" disabled={pendiente || Boolean(ocupado)} className="w-full sm:w-auto">
         {pendiente ? "Guardando…" : "Registrar entrada y generar etiqueta"}
       </Button>
     </form>

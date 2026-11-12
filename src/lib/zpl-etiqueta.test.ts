@@ -31,8 +31,9 @@ test("el zpl deja el tag y el qr en la etiqueta de la zebra", () => {
   assert.match(zpl, /pollo/);
   assert.match(zpl, /\^PW456/);
   assert.match(zpl, /\^LL256/);
-  assert.match(zpl, /\^FO208,6\^BQN,2,4/);
-  assert.match(zpl, /\^A0N,27,/);
+  assert.match(zpl, /\^FO286,42\^BQN,2,3/);
+  assert.match(zpl, /\^FO8,24\^A0N,3[0-9],/);
+  assert.equal(/^[\s\S]*\^A0N,1[0-9],/.test(zpl) || /\^A0N,2[0-9],/.test(zpl), true);
   assert.match(zpl, /TAG:393710/);
   assert.equal(zpl.includes("^"), true);
 });

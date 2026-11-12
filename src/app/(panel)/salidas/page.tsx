@@ -31,6 +31,8 @@ async function Salidas({
   const parametros = await searchParams;
   const pesajeId = Number(leer(parametros.pesaje));
   const token = leer(parametros.token);
+  const aviso = leer(parametros.aviso);
+  const tono = leer(parametros.tono);
   const modoPedido = leer(parametros.modo);
   const esAdmin = (await leerSesion())?.rango === "administrador";
   const modo =
@@ -51,6 +53,18 @@ async function Salidas({
 
   return (
     <div className="grid gap-8">
+      {aviso ? (
+        <p
+          role="status"
+          className={
+            tono === "ok"
+              ? "rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-5 text-lg font-semibold leading-snug text-emerald-950 sm:px-6 sm:py-6 sm:text-xl"
+              : "rounded-xl border px-4 py-3 text-sm"
+          }
+        >
+          {aviso}
+        </p>
+      ) : null}
       <div className={`grid gap-4 ${esAdmin ? "sm:grid-cols-2" : ""} ${modo === "" ? "sm:min-h-72" : ""}`}>
         <a
           href="/salidas?modo=consumo"

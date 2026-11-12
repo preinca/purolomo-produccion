@@ -20,9 +20,19 @@ import {
 import { destinoValido } from "@/lib/destinos";
 import { lineaPorId } from "@/lib/lineas";
 import { productoPorCodigo } from "@/lib/mpc";
-import { abrirPesaje, buscarMiniLote, buscarPesaje, consumirEnPesaje, faltantesDeReceta, finalizarPesaje, guardarObservacionPesaje, quitarKgDePesaje, retirosDeTag, siguienteNumero, tagsDelTipo } from "@/lib/pesajes";
+import { abrirPesaje, buscarMiniLote, buscarPesaje, consumirEnPesaje, eliminarPesajeEnCurso, faltantesDeReceta, finalizarPesaje, guardarObservacionPesaje, quitarKgDePesaje, retirosDeTag, siguienteNumero, tagsDelTipo } from "@/lib/pesajes";
 import { leerConsumoQr, leerTextoQr } from "@/lib/qr";
-import { encolarEtiquetasPendientes } from "@/lib/impresion";
+import { encolarEtiquetasDelProceso } from "@/lib/impresion";
+import {
+  asignarAlProceso,
+  eliminarEntradaEnCurso,
+  eliminarEntradasPorImprimir,
+  guardarEtiquetasDelProceso,
+  iniciarProceso,
+  procesoAbierto,
+  reiniciarCarga,
+  terminarProceso,
+} from "@/lib/proceso-recepcion";
 import { eliminarReceta, guardarReceta, leerRecetaExcel } from "@/lib/recetas";
 import { exigirAdmin, exigirRango, exigirSesion, leerSesion } from "@/lib/usuarios";
 
@@ -285,6 +295,26 @@ export async function quitarKgPesajeFormulario(
   redirect(await rutaConsumo(pesajeId));
 }
 
+export async function eliminarPesajeEnCursoFormulario(formData: FormData) {
+  await exigirRango(["administrador", "pesador"]);
+  const pesajeId = Number(texto(formData, "pesaje_id"));
+  if (String(formData.get("confirmar") ?? "") !== "si") {
+    redirect(`/salidas?modo=consumo&aviso=${encodeURIComponent("Marca la confirmación para eliminar el pesaje en proceso.")}`);
+  }
+  const resultado = await eliminarPesajeEnCurso(getDb(), pesajeId);
+  if (!resultado.ok) {
+    redirect(`/salidas?modo=consumo&pesaje=${pesajeId}&aviso=${encodeURIComponent(resultado.error)}`);
+  }
+  for (const tag of resultado.value) {
+    revalidatePath(`/lote/${tag}`);
+    revalidatePath(`/qr/imagen/${tag}`);
+  }
+  refrescar();
+  redirect(
+    `/salidas?modo=consumo&tono=ok&aviso=${encodeURIComponent("Se eliminó el pesaje en proceso. Los kilos volvieron a la cava.")}`,
+  );
+}
+
 export async function guardarObservacionTagFormulario(
   _estado: EstadoFormulario,
   formData: FormData,
@@ -312,6 +342,14 @@ export async function guardarObservacionPesajeFormulario(
   return { ok: true };
 }
 
+export async function revisarTagEntrada(tag: string): Promise<string | null> {
+  await exigirRango(["administrador", "recepcionista"]);
+  const limpio = tag.trim();
+  if (!/^\d{4,8}$/.test(limpio)) return null;
+  const existe = await getDb().get("SELECT tag FROM lotes WHERE tag = ?", limpio);
+  return existe ? `El TAG ${limpio} ya está registrado.` : null;
+}
+
 export async function crearRecepcion(
   _estado: EstadoFormulario,
   formData: FormData,
@@ -326,18 +364,106 @@ export async function crearRecepcion(
   });
   if (!validado.ok) return { error: validado.error };
 
-  const resultado = await insertarRecepcion(getDb(), {
+  const db = getDb();
+  const proceso = await procesoAbierto(db);
+  if (!proceso) return { error: "Inicia el proceso de recepción antes de cargar las entradas." };
+
+  const resultado = await insertarRecepcion(db, {
     ...validado.value,
     observaciones: texto(formData, "observaciones").trim().slice(0, 500),
   });
   if (!resultado.ok) return { error: resultado.error };
+  await asignarAlProceso(db, resultado.value.tag, proceso.id);
   refrescar();
-  redirect(`/entradas?etiqueta=${resultado.value.tag}`);
+  redirect(
+    `/entradas?tono=ok&aviso=${encodeURIComponent(`Se registró el TAG ${resultado.value.tag}. La etiqueta quedó al final de este proceso.`)}`,
+  );
 }
 
-export async function imprimirEtiquetasPendientes() {
+export async function iniciarProcesoRecepcion() {
   await exigirRango(["administrador", "recepcionista"]);
-  const resultado = await encolarEtiquetasPendientes(getDb());
+  const resultado = await iniciarProceso(getDb());
+  const aviso = resultado.ok
+    ? "Proceso de recepción iniciado. Carga cada materia prima y, al terminar, cierra el proceso para imprimir."
+    : resultado.error;
+  refrescar();
+  redirect(`/entradas?aviso=${encodeURIComponent(aviso)}`);
+}
+
+export async function reiniciarProcesoRecepcion(formData: FormData) {
+  await exigirRango(["administrador", "recepcionista"]);
+  if (String(formData.get("confirmar") ?? "") !== "si") {
+    refrescar();
+    redirect(`/entradas?aviso=${encodeURIComponent("Marca la confirmación para reiniciar la carga.")}`);
+  }
+  const resultado = await reiniciarCarga(getDb());
+  const aviso = !resultado.ok
+    ? resultado.error
+    : resultado.value === 0
+      ? "La carga ya estaba vacía. Puedes registrar de nuevo."
+      : `Se reinició la carga y se quitaron ${resultado.value} ${resultado.value === 1 ? "entrada" : "entradas"}. Regístralas de nuevo.`;
+  refrescar();
+  redirect(`/entradas?tono=${resultado.ok ? "ok" : "error"}&aviso=${encodeURIComponent(aviso)}`);
+}
+
+export async function terminarProcesoRecepcion() {
+  await exigirRango(["administrador", "recepcionista"]);
+  const resultado = await terminarProceso(getDb());
+  const aviso = !resultado.ok
+    ? resultado.error
+    : resultado.value.entradas > 0
+      ? `Proceso terminado. Hay ${resultado.value.entradas} etiquetas listas para imprimir.`
+      : "Proceso terminado. No se cargó ninguna entrada.";
+  refrescar();
+  redirect(`/entradas?tono=${resultado.ok ? "ok" : "error"}&aviso=${encodeURIComponent(aviso)}`);
+}
+
+export async function eliminarEtiquetaEnCurso(formData: FormData) {
+  await exigirRango(["administrador", "recepcionista"]);
+  const tag = String(formData.get("tag") ?? "").trim();
+  const resultado = await eliminarEntradaEnCurso(getDb(), tag);
+  const aviso = resultado.ok
+    ? `Se eliminó la etiqueta del TAG ${tag}. Ya no queda en este proceso.`
+    : resultado.error;
+  refrescar();
+  redirect(`/entradas?tono=${resultado.ok ? "ok" : "error"}&aviso=${encodeURIComponent(aviso)}`);
+}
+
+export async function eliminarEtiquetasPorImprimir(formData: FormData) {
+  await exigirRango(["administrador", "recepcionista"]);
+  const modo = String(formData.get("modo") ?? "");
+  const procesoId = Number(formData.get("proceso"));
+  if (modo === "todas" && String(formData.get("confirmar") ?? "") !== "si") {
+    refrescar();
+    redirect(`/entradas?aviso=${encodeURIComponent("Marca la confirmación para eliminar todas las etiquetas.")}`);
+  }
+  const resultado = await eliminarEntradasPorImprimir(
+    getDb(),
+    procesoId,
+    modo === "todas" ? "todas" : formData.getAll("tag").map((tag) => String(tag)),
+  );
+  const aviso = !resultado.ok
+    ? resultado.error
+    : modo === "todas"
+      ? `Se eliminaron las ${resultado.value} etiquetas. Ya no se van a imprimir.`
+      : `Se eliminaron ${resultado.value} ${resultado.value === 1 ? "etiqueta seleccionada" : "etiquetas seleccionadas"}.`;
+  refrescar();
+  redirect(`/entradas?tono=${resultado.ok ? "ok" : "error"}&aviso=${encodeURIComponent(aviso)}`);
+}
+
+export async function guardarEtiquetasPendientes(formData: FormData) {
+  await exigirRango(["administrador", "recepcionista"]);
+  const resultado = await guardarEtiquetasDelProceso(getDb(), Number(formData.get("proceso")));
+  const aviso = resultado.ok
+    ? `Se guardaron ${resultado.value} ${resultado.value === 1 ? "etiqueta" : "etiquetas"}. No se enviaron a la impresora.`
+    : resultado.error;
+  refrescar();
+  redirect(`/entradas?tono=${resultado.ok ? "ok" : "error"}&aviso=${encodeURIComponent(aviso)}`);
+}
+
+export async function imprimirEtiquetasPendientes(formData: FormData) {
+  await exigirRango(["administrador", "recepcionista"]);
+  const resultado = await encolarEtiquetasDelProceso(getDb(), Number(formData.get("proceso")));
   const aviso = resultado.ok
     ? `Se enviaron ${resultado.value} etiquetas a la impresora de la oficina.`
     : resultado.error;

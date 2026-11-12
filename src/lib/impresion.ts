@@ -2,12 +2,31 @@ import type { Db } from "./db";
 import type { Resultado, Lote } from "./lotes";
 import { productoPorCodigo } from "./mpc";
 import { textoQr } from "./qr";
+import { asegurarProceso } from "./proceso-recepcion";
 import { zplDeLotes } from "./zpl-etiqueta";
 
-let esquemaListo = false;
+const esquemaGlobal = globalThis as { purolomoImpresion?: Promise<void> };
 
-export async function asegurarImpresion(db: Db) {
-  if (esquemaListo) return;
+export function asegurarImpresion(db: Db) {
+  if (!esquemaGlobal.purolomoImpresion) {
+    esquemaGlobal.purolomoImpresion = prepararImpresion(db).catch((error: unknown) => {
+      esquemaGlobal.purolomoImpresion = undefined;
+      throw error;
+    });
+  }
+  return esquemaGlobal.purolomoImpresion;
+}
+
+async function prepararImpresion(db: Db) {
+  try {
+    await db.get("SELECT id FROM impresiones LIMIT 1");
+    await db.get("SELECT impresion_id FROM impresion_items LIMIT 1");
+  } catch {
+    await crearTablasImpresion(db);
+  }
+}
+
+async function crearTablasImpresion(db: Db) {
   await db.exec(`
     ALTER TABLE lotes ADD COLUMN IF NOT EXISTS impresa_en TEXT NOT NULL DEFAULT '';
     CREATE TABLE IF NOT EXISTS impresiones (
@@ -23,7 +42,6 @@ export async function asegurarImpresion(db: Db) {
       orden INTEGER NOT NULL
     );
   `);
-  esquemaListo = true;
 }
 
 export async function contarEtiquetas(db: Db, modo: "pendiente" | "cola") {
@@ -33,13 +51,18 @@ export async function contarEtiquetas(db: Db, modo: "pendiente" | "cola") {
   return Number(fila?.n ?? 0);
 }
 
-export async function encolarEtiquetasPendientes(db: Db): Promise<Resultado<number>> {
+export async function encolarEtiquetasDelProceso(db: Db, procesoId: number): Promise<Resultado<number>> {
+  await asegurarProceso(db);
   await asegurarImpresion(db);
+  if (!Number.isInteger(procesoId) || procesoId <= 0) {
+    return { ok: false, error: "El proceso de recepción no es válido." };
+  }
   return db.transaction(async (tx) => {
     const filas = await tx.all<{ tag: string }>(
-      "SELECT tag FROM lotes WHERE impresa_en = '' ORDER BY creado_en, tag FOR UPDATE",
+      "SELECT tag FROM lotes WHERE proceso_id = ? AND impresa_en = '' ORDER BY creado_en, tag FOR UPDATE",
+      procesoId,
     );
-    if (filas.length === 0) return { ok: false, error: "No hay etiquetas pendientes de imprimir." };
+    if (filas.length === 0) return { ok: false, error: "Ese proceso no tiene etiquetas pendientes de imprimir." };
     const creada = await tx.get<{ id: number }>("INSERT INTO impresiones (estado) VALUES ('pendiente') RETURNING id");
     const id = Number(creada?.id);
     for (let indice = 0; indice < filas.length; indice += 1) {

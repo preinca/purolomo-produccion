@@ -93,14 +93,14 @@ export async function excelDeReceta(receta: Receta): Promise<Buffer> {
   receta.items.forEach((item, indice) => {
     const fila = 9 + indice;
     const producto = productoPorTipo(item.tipo);
-    const toleranciaItem = item.tolerancia ?? toleranciaProducto;
-    const maximoItem = item.maximo ?? Math.round((item.kg + toleranciaItem) * 1000) / 1000;
-    const minimoItem = item.minimo ?? item.kg;
+    const toleranciaItem = 20;
+    const minimoItem = Math.round((item.kg - toleranciaItem) * 1000) / 1000;
+    const maximoItem = Math.round((item.kg + toleranciaItem) * 1000) / 1000;
     const valores: (string | number | ExcelJS.CellFormulaValue)[] = [
       item.tipo,
       item.kg,
       toleranciaItem,
-      rangoFormula(`B${fila}`, `(B${fila}+C${fila})`, minimoItem, maximoItem),
+      rangoFormula(`B${fila}-${toleranciaItem}`, `B${fila}+${toleranciaItem}`, minimoItem, maximoItem),
       producto?.nombre ?? "",
       producto?.codigo ?? "",
       producto?.descripcion ?? "",
@@ -147,7 +147,7 @@ export async function excelDeReceta(receta: Receta): Promise<Buffer> {
 
   hoja.mergeCells(totalFila + 2, 1, totalFila + 2, 7);
   const nota = hoja.getCell(totalFila + 2, 1);
-  nota.value = "Cambia la tolerancia en las celdas amarillas. El rango se calcula solo, en el pesaje completo y en cada materia prima.";
+  nota.value = "Los kilos de cada materia prima son el promedio. Al escribirlos, el rango queda 20 kg por debajo y 20 kg por arriba.";
   nota.font = { name: "Calibri", size: 9, italic: true, color: { argb: SUAVE } };
   nota.alignment = { horizontal: "center" };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
-import { abrirPesajeFormulario, consumirPesajeFormulario, finalizarPesajeFormulario, guardarObservacionPesajeFormulario, loteActualDesdeTag, numeroSiguientePesaje, quitarKgPesajeFormulario, type EstadoFormulario, type LoteLeido } from "@/app/actions";
+import { abrirPesajeFormulario, consumirPesajeFormulario, eliminarPesajeEnCursoFormulario, finalizarPesajeFormulario, guardarObservacionPesajeFormulario, loteActualDesdeTag, numeroSiguientePesaje, quitarKgPesajeFormulario, type EstadoFormulario, type LoteLeido } from "@/app/actions";
 import { EscanerSalida } from "@/components/escaner-salida";
 import { FormObservacion } from "@/components/form-observacion";
 import { Button } from "@/components/ui/button";
@@ -227,14 +227,45 @@ function Consumir({
   const maximo = useMemo(() => {
     if (!lectura || !partida) return 0;
     const faltaTipo = Math.max(0, (partida.maximo ?? partida.objetivo + (partida.tolerancia ?? pesaje.tolerancia)) - partida.usado);
+    const faltaPromedio = Math.max(0, partida.objetivo - partida.usado);
     const faltaTotal = Math.max(0, pesaje.maximo - pesaje.total);
-    return Math.round(Math.min(lectura.kgRestantes, faltaTipo, faltaTotal) * 1000) / 1000;
+    return Math.round(Math.min(lectura.kgRestantes, Math.max(faltaTipo, faltaPromedio), faltaTotal) * 1000) / 1000;
   }, [lectura, partida, pesaje]);
   const faltaDelTipo = partida ? Math.max(0, partida.objetivo - partida.usado) : 0;
   const enLogistica = lectura?.estado === "LOGISTICA";
   const fueraDeReceta = Boolean(lectura && !enLogistica && !partida);
   const noAlcanza = Boolean(lectura && partida && lectura.kgRestantes + 0.001 < faltaDelTipo);
   const otros = existencias.filter((item) => item.tipo === lectura?.tipoCodigo && item.tag !== lectura?.tag && item.kg > 0.001);
+  const minimoTipo = partida?.minimo ?? partida?.objetivo ?? 0;
+  const maximoTipo = partida?.maximo ?? (partida ? partida.objetivo + (partida.tolerancia ?? pesaje.tolerancia) : 0);
+  const kilosEscritos = Number(kg.replace(",", "."));
+  const proyectadoTipo = partida
+    ? Math.round((partida.usado + (Number.isFinite(kilosEscritos) ? kilosEscritos : 0)) * 1000) / 1000
+    : 0;
+  const faltaMinimo = partida ? Math.max(0, minimoTipo - partida.usado) : 0;
+  const tagAlcanza = Boolean(lectura && lectura.kgRestantes + 0.001 >= faltaMinimo);
+  const faltaPromedio = partida ? Math.max(0, partida.objetivo - partida.usado) : 0;
+  const formulaLista =
+    pesaje.lineas.length > 0 &&
+    pesaje.lineas.every(
+      (linea) =>
+        linea.usado + 0.001 >= linea.objetivo &&
+        linea.usado <= (linea.maximo ?? linea.objetivo) + 0.001,
+    );
+  const completaPromedio = Boolean(
+    partida &&
+      lectura &&
+      Number.isFinite(kilosEscritos) &&
+      proyectadoTipo <= partida.objetivo + 0.001 &&
+      (Math.abs(kilosEscritos - lectura.kgRestantes) < 0.001 || Math.abs(kilosEscritos - faltaPromedio) < 0.001),
+  );
+  const fueraDeRango = Boolean(
+    partida &&
+      Number.isFinite(kilosEscritos) &&
+      kilosEscritos > 0 &&
+      !completaPromedio &&
+      (proyectadoTipo > maximoTipo + 0.001 || (proyectadoTipo + 0.001 < minimoTipo && tagAlcanza)),
+  );
 
   function elegir(leido: LoteLeido) {
     cargado.current = leido.tag;
@@ -250,11 +281,8 @@ function Consumir({
       setKg("");
       return;
     }
-    const faltaObjetivo = Math.max(0, (linea.minimo ?? linea.objetivo) - linea.usado);
-    const faltaTipo = Math.max(0, (linea.maximo ?? linea.objetivo + (linea.tolerancia ?? pesaje.tolerancia)) - linea.usado);
-    const faltaTotal = Math.max(0, pesaje.maximo - pesaje.total);
-    const tope = Math.min(leido.kgRestantes, faltaTipo, faltaTotal);
-    const sugerido = Math.min(tope, faltaObjetivo > 0 ? faltaObjetivo : tope);
+    const faltaPromedio = Math.max(0, Math.round((linea.objetivo - linea.usado) * 1000) / 1000);
+    const sugerido = Math.min(leido.kgRestantes, faltaPromedio);
     setKg(sugerido > 0 ? String(Math.round(sugerido * 1000) / 1000) : "");
   }
 
@@ -357,11 +385,11 @@ function Consumir({
         action={accion}
         className="grid gap-6"
         onSubmit={(event) => {
-          if (fueraDeReceta || enLogistica) event.preventDefault();
+          if (fueraDeReceta || enLogistica || fueraDeRango) event.preventDefault();
         }}
       >
       <input type="hidden" name="pesaje_id" value={pesaje.id} />
-      <EscanerSalida onLeido={elegir} />
+      {formulaLista ? null : <EscanerSalida onLeido={elegir} camaraGrande />}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="grid gap-1.5">
           <Label htmlFor="tag">TAG</Label>
@@ -455,7 +483,7 @@ function Consumir({
           ) : null}
           {partida ? (
             <p className="sm:col-span-2 text-muted-foreground">
-              Para este pesaje de {partida.tipo} puedes retirar hasta {formatoKg(maximo)}.
+              {partida.tipo} opera de {formatoKg(minimoTipo)} a {formatoKg(maximoTipo)}. Los kilos tienen que quedar dentro de ese rango.
             </p>
           ) : null}
         </div>
@@ -468,6 +496,11 @@ function Consumir({
       {enLogistica && lectura ? (
         <p role="alert" className="rounded-lg bg-orange-500 px-3 py-2 text-sm font-medium text-white">
           Este TAG fue trasladado a logística y ya no se puede consumir.
+        </p>
+      ) : null}
+      {fueraDeRango && partida ? (
+        <p role="alert" className="rounded-lg border border-destructive bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {partida.tipo} opera de {formatoKg(minimoTipo)} a {formatoKg(maximoTipo)}. Esos kilos quedan fuera del rango y no se pueden cargar.
         </p>
       ) : null}
       {fueraDeReceta && lectura ? (
@@ -495,10 +528,17 @@ function Consumir({
           {estado.error}
         </p>
       ) : null}
-      <Button type="submit" size="lg" disabled={pendiente || fueraDeReceta || enLogistica} className="w-fit">
+      {formulaLista ? null : (
+      <button
+        type="submit"
+        disabled={pendiente || fueraDeReceta || enLogistica}
+        className="inline-flex h-16 w-full items-center justify-center rounded-xl bg-green-600 px-6 text-lg font-semibold text-white hover:bg-green-700 disabled:opacity-50 sm:h-14 sm:text-base"
+      >
         {pendiente ? "Guardando…" : "Registrar consumo"}
-      </Button>
+      </button>
+      )}
       </form>
+      <EliminarRegistro pesajeId={pesaje.id} />
       </>
       )}
       {pesaje.finalizado ? (
@@ -596,6 +636,50 @@ function Retiros({ pesaje, token }: { pesaje: PesajeVista; token: string }) {
               </div>
             </article>
           ))}
+    </div>
+  );
+}
+
+function EliminarRegistro({ pesajeId }: { pesajeId: number }) {
+  const [pregunta, setPregunta] = useState(false);
+  if (!pregunta) {
+    return (
+      <div className="border-t-2 border-neutral-800 pt-6">
+        <button
+          type="button"
+          onClick={() => setPregunta(true)}
+          className="inline-flex h-14 w-full items-center justify-center rounded-xl bg-red-600 px-4 text-base font-semibold text-white hover:bg-red-700"
+        >
+          Eliminar pesaje en proceso
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="grid gap-4 rounded-xl border-2 border-amber-400 bg-amber-50 px-5 py-5">
+      <p className="text-lg font-semibold leading-snug text-amber-950 sm:text-xl">
+        ¿Estás seguro de eliminar el pesaje en proceso? Se quitan los kilos ya cargados y este pesaje deja de existir.
+      </p>
+      <form action={eliminarPesajeEnCursoFormulario} className="grid gap-3">
+        <input type="hidden" name="pesaje_id" value={pesajeId} />
+        <label className="flex items-center gap-2 text-base font-medium">
+          <input name="confirmar" type="checkbox" value="si" required className="size-5" />
+          Confirmo eliminar este pesaje
+        </label>
+        <button
+          type="submit"
+          className="inline-flex h-14 w-full items-center justify-center rounded-xl bg-red-600 px-4 text-base font-semibold text-white hover:bg-red-700"
+        >
+          Sí, eliminar
+        </button>
+        <button
+          type="button"
+          onClick={() => setPregunta(false)}
+          className="inline-flex h-14 w-full items-center justify-center rounded-xl border border-border bg-white px-6 text-base font-semibold"
+        >
+          No, volver
+        </button>
+      </form>
     </div>
   );
 }

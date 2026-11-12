@@ -1,5 +1,5 @@
 import { encode } from "uqr";
-import { pieEtiqueta, type EtiquetaCava } from "./etiqueta-cava";
+import { lineasEtiqueta, type EtiquetaCava } from "./etiqueta-cava";
 
 const PT_POR_CM = 72 / 2.54;
 /** Etiqueta adhesiva: 5,7 cm de ancho por 3,2 cm de alto. */
@@ -24,99 +24,28 @@ export function pdfDeEtiqueta(etiqueta: EtiquetaCava, textoDelQr: string) {
 }
 
 function dibujo(etiqueta: EtiquetaCava, textoDelQr: string) {
-  const margen = 1.5;
-  const pie = pieEtiqueta(etiqueta.fecha);
-  const tamPie = Math.min(6.4, (ANCHO - margen * 2) / Math.max(1, pie.length * 0.58));
-  const pieAlto = tamPie + 2.2;
-  const altoCuerpo = ALTO - margen - pieAlto;
-  const ladoQr = altoCuerpo;
-  const xQr = margen;
-  const yQr = pieAlto;
-  const xTexto = xQr + ladoQr + 1.6;
-  const anchoTexto = ANCHO - xTexto - margen;
-  const detalle = [etiqueta.descripcion, etiqueta.tipo].filter(Boolean).join(" - ");
-  const pedidos = [
-    { valor: etiqueta.tag, peso: 1.7, maxLineas: 1 },
-    { valor: etiqueta.producto, peso: 1.2, maxLineas: 2 },
-    { valor: detalle, peso: 1.05, maxLineas: 2 },
-    { valor: etiqueta.codigo, peso: 1.25, maxLineas: 1 },
-    { valor: etiqueta.kgRecibidos, peso: 1.2, maxLineas: 1 },
-    { valor: etiqueta.fecha, peso: 1.05, maxLineas: 1 },
-    { valor: etiqueta.hora, peso: 1.05, maxLineas: 1 },
-  ].filter((pedido) => pedido.valor.trim());
-  const bloques = medir(pedidos, anchoTexto, altoCuerpo);
-  const comandos = ["0.3 w", "0 0 0 RG", "0 0 0 rg", `${margen} ${pieAlto} m ${ANCHO - margen} ${pieAlto} l S`];
-  comandos.push(...modulosQr(textoDelQr, xQr, yQr, ladoQr));
+  const margen = 2.2;
+  const ladoQr = redondear(ALTO * 0.58);
+  const xQr = redondear(ANCHO - ladoQr - 1.4);
+  const yQr = redondear((ALTO - ladoQr) / 2);
+  const anchoTexto = xQr - margen - 1.2;
+  const lineas = lineasEtiqueta(etiqueta);
+  const altoUtil = ALTO - margen * 2;
+  const cuerpos = Math.max(lineas.length - 1, 1);
+  const paso = altoUtil / (1.7 + cuerpos);
+  const masLargaCuerpo = Math.max(...lineas.slice(1).map((linea) => linea.length), 1);
+  const masLargaTag = Math.max(lineas[0]?.length ?? 1, 1);
+  const tamCuerpo = Math.max(5, Math.min(paso * 0.92, anchoTexto / (masLargaCuerpo * 0.56)));
+  const tamTag = Math.max(tamCuerpo, Math.min(paso * 1.55, anchoTexto / (masLargaTag * 0.52), tamCuerpo * 1.7));
+  const comandos = ["0 0 0 rg", ...modulosQr(textoDelQr, xQr, yQr, ladoQr)];
 
   let tope = ALTO - margen;
-  for (const bloque of bloques) {
-    for (const linea of bloque.lineas) {
-      const baseline = tope - bloque.tam * 0.76;
-      if (baseline < yQr) break;
-      comandos.push(texto("F2", bloque.tam, xTexto, baseline, linea));
-      tope = baseline - bloque.tam * 0.18;
-    }
-    tope -= bloque.tam * 0.12;
-  }
-
-  const anchoPie = pie.length * tamPie * 0.56;
-  comandos.push(texto("F2", tamPie, Math.max(margen, (ANCHO - anchoPie) / 2), 1.5, pie));
-  return comandos.join("\n");
-}
-
-function medir(
-  pedidos: { valor: string; peso: number; maxLineas: number }[],
-  ancho: number,
-  altoDisponible: number,
-) {
-  let bajo = 4;
-  let alto = 20;
-  let elegido = bajo;
-  for (let paso = 0; paso < 18; paso += 1) {
-    const medio = (bajo + alto) / 2;
-    const prueba = armarBloques(pedidos, ancho, medio);
-    if (prueba.alto <= altoDisponible) {
-      elegido = medio;
-      bajo = medio;
-    } else {
-      alto = medio;
-    }
-  }
-  return armarBloques(pedidos, ancho, elegido).bloques;
-}
-
-function armarBloques(
-  pedidos: { valor: string; peso: number; maxLineas: number }[],
-  ancho: number,
-  base: number,
-) {
-  const bloques = pedidos.map((pedido) => {
-    const tam = redondear(Math.max(4.5, base * pedido.peso));
-    const lineas = partir(pedido.valor, ancho, tam).slice(0, pedido.maxLineas);
-    const alto = lineas.length * tam * 0.94 + tam * 0.12;
-    return { tam, lineas, alto };
+  lineas.forEach((linea, indice) => {
+    const tam = indice === 0 ? tamTag : tamCuerpo;
+    comandos.push(texto("F2", redondear(tam), margen, redondear(tope - tam * 0.78), linea));
+    tope -= indice === 0 ? tam * 1.05 : paso;
   });
-  return { bloques, alto: bloques.reduce((suma, bloque) => suma + bloque.alto, 0) };
-}
-
-function partir(valor: string, ancho: number, tamano: number) {
-  const textoLimpio = valor.trim();
-  if (!textoLimpio) return [];
-  const maximo = Math.max(6, Math.floor(ancho / (tamano * 0.6)));
-  const palabras = textoLimpio.split(/\s+/);
-  const lineas: string[] = [];
-  let actual = "";
-  for (const palabra of palabras) {
-    const candidato = actual ? `${actual} ${palabra}` : palabra;
-    if (candidato.length <= maximo) {
-      actual = candidato;
-      continue;
-    }
-    if (actual) lineas.push(actual);
-    actual = palabra.length <= maximo ? palabra : palabra.slice(0, maximo);
-  }
-  if (actual) lineas.push(actual);
-  return lineas.slice(0, 2);
+  return comandos.join("\n");
 }
 
 function redondear(valor: number) {
@@ -208,4 +137,10 @@ function armar(objetos: Buffer[]) {
     Buffer.from(`${xref}trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${cursor}\n%%EOF`),
   );
   return Buffer.concat(partes);
+}
+
+/** El PDF de la etiqueta escribe el TAG como texto, por ejemplo "(TAG 400123)". */
+export function tagDePdfEtiqueta(datos: Uint8Array) {
+  const texto = new TextDecoder("latin1").decode(datos);
+  return texto.match(/\(TAG (\d{4,8})\)/)?.[1] ?? null;
 }
