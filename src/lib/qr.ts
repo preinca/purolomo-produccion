@@ -174,6 +174,17 @@ export function svgDeTexto(texto: string, pixelSize = 3) {
   });
 }
 
+/** El mismo QR corto de la etiqueta impresa, con módulos grandes para leerlo desde la pantalla. */
+export function svgQrEnPantalla(tag: string) {
+  return renderSVG(textoQrDeEtiqueta(tag), {
+    border: 4,
+    ecc: "H",
+    pixelSize: 8,
+    blackColor: "#000000",
+    whiteColor: "#ffffff",
+  });
+}
+
 export function svgQr(lote: Lote, pixelSize = 4, retiros: RetiroEnQr[] = []) {
   return svgDeTexto(textoQr(lote, retiros), pixelSize);
 }

@@ -1,9 +1,8 @@
 import { connection } from "next/server";
 import { getDb } from "@/lib/db";
 import { buscarLote } from "@/lib/lotes";
-import { retirosDeTag } from "@/lib/pesajes";
 import { pngQr } from "@/lib/png-qr";
-import { textoQr } from "@/lib/qr";
+import { textoQrDeEtiqueta } from "@/lib/qr";
 
 export async function GET(
   _request: Request,
@@ -19,7 +18,7 @@ export async function GET(
   const lote = await buscarLote(db, limpio);
   if (!lote) return new Response("No existe ese TAG", { status: 404 });
 
-  const png = pngQr(textoQr(lote, await retirosDeTag(db, lote.tag)));
+  const png = pngQr(textoQrDeEtiqueta(lote.tag));
   return new Response(new Uint8Array(png), {
     headers: {
       "Content-Type": "image/png",

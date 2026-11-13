@@ -1,10 +1,10 @@
 import { etiquetaDeLote, lineasEtiqueta } from "@/lib/etiqueta-cava";
 import type { Lote } from "@/lib/lotes";
-import { svgQr } from "@/lib/qr";
+import { svgQrEnPantalla } from "@/lib/qr";
 
 export function EtiquetaCava({ lote, nota = true }: { lote: Lote; nota?: boolean }) {
   const etiqueta = etiquetaDeLote(lote);
-  const svg = svgQr(lote, 6);
+  const svg = svgQrEnPantalla(lote.tag);
   const lineas = lineasEtiqueta(etiqueta);
 
   return (

@@ -1,11 +1,11 @@
 import { formatoFecha, formatoKg } from "@/lib/formato";
 import { kgConsumidosDe, kgDisponiblesDe, tagAgotado, type Lote } from "@/lib/lotes";
 import { productoPorCodigo } from "@/lib/mpc";
-import { svgQr, type RetiroEnQr } from "@/lib/qr";
+import { svgQrEnPantalla, type RetiroEnQr } from "@/lib/qr";
 
 export function QrEtiqueta({ lote, retiros = [] }: { lote: Lote; retiros?: RetiroEnQr[] }) {
   const tipo = productoPorCodigo(lote.codigo);
-  const svg = svgQr(lote, 3, retiros);
+  const svg = svgQrEnPantalla(lote.tag);
   return (
     <article className="break-inside-avoid rounded-xl border bg-white p-4 text-[#071422]">
       <div className="flex items-start justify-between gap-3 border-b pb-2">
@@ -20,9 +20,9 @@ export function QrEtiqueta({ lote, retiros = [] }: { lote: Lote; retiros?: Retir
         </div>
         <p className="font-mono text-lg font-bold">{lote.tag}</p>
       </div>
-      <div className="mt-3 grid grid-cols-1 items-start gap-3 sm:grid-cols-[7rem_1fr]">
+      <div className="mt-3 grid grid-cols-1 items-start gap-3 sm:grid-cols-[12rem_1fr]">
         <div
-          className="overflow-hidden rounded-md bg-white"
+          className="w-full max-w-48 rounded-md bg-white [&_svg]:h-auto [&_svg]:w-full"
           dangerouslySetInnerHTML={{ __html: svg }}
         />
         <dl className="grid grid-cols-1 gap-x-3 gap-y-1 text-[11px] min-[420px]:grid-cols-2">
