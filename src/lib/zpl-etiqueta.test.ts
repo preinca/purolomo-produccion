@@ -33,15 +33,29 @@ test("el zpl deja el tag y el qr en la etiqueta de la zebra", () => {
   assert.match(zpl, /\^PW456/);
   assert.match(zpl, /\^LL256/);
   assert.doesNotMatch(zpl, /\^BQ/);
-  const modulos = [...zpl.matchAll(/\^FO(\d+),\d+\^GB(\d+),4,5/g)];
-  assert.ok(modulos.length > 0);
-  for (const modulo of modulos) {
-    const x = Number(modulo[1]);
-    const ancho = Number(modulo[2]);
-    assert.ok(x >= 286);
-    assert.ok(x + ancho <= 456);
-    assert.equal(ancho % 3, 0);
+  const cajas = [...zpl.matchAll(/\^FO(\d+),(\d+)\^GB(\d+),(\d+),/g)];
+  assert.ok(cajas.length > 0);
+  let izquierda = 456;
+  let derecha = 0;
+  let arriba = 256;
+  let abajo = 0;
+  for (const caja of cajas) {
+    const x = Number(caja[1]);
+    const y = Number(caja[2]);
+    const ancho = Number(caja[3]);
+    const alto = Number(caja[4]);
+    izquierda = Math.min(izquierda, x);
+    derecha = Math.max(derecha, x + ancho);
+    arriba = Math.min(arriba, y);
+    abajo = Math.max(abajo, y + alto);
   }
+  const anchoQr = derecha - izquierda;
+  const altoQr = abajo - arriba;
+  assert.ok(izquierda >= 286);
+  assert.ok(derecha <= 456);
+  assert.ok(anchoQr >= 140);
+  assert.ok(altoQr > anchoQr);
+  assert.ok(abajo <= 256);
   assert.match(zpl, /\^FO8,24\^A0N,3[0-9],/);
   assert.equal(/^[\s\S]*\^A0N,1[0-9],/.test(zpl) || /\^A0N,2[0-9],/.test(zpl), true);
   assert.equal(zpl.includes("^"), true);

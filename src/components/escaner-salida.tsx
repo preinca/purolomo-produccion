@@ -121,14 +121,8 @@ export function EscanerSalida({
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
-        audio: false,
-      });
+      const stream = await abrirCamaraPrincipal();
+      await enfocarCamaraPrincipal(stream.getVideoTracks()[0]);
       streamRef.current = stream;
       setCamara(true);
     } catch {
@@ -312,6 +306,69 @@ export function EscanerSalida({
       ) : null}
     </div>
   );
+}
+
+async function abrirCamaraPrincipal() {
+  const pedido = {
+    audio: false,
+    video: {
+      facingMode: { ideal: "environment" },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+    },
+  };
+  const stream = await navigator.mediaDevices.getUserMedia(pedido);
+  const principal = await idCamaraPrincipal();
+  const actual = stream.getVideoTracks()[0]?.getSettings().deviceId;
+  if (!principal || principal === actual) return stream;
+  stream.getTracks().forEach((pista) => pista.stop());
+  return navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: { deviceId: { exact: principal }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+  });
+}
+
+async function idCamaraPrincipal() {
+  const dispositivos = await navigator.mediaDevices.enumerateDevices();
+  const videos = dispositivos.filter((dispositivo) => dispositivo.kind === "videoinput" && dispositivo.label);
+  const trasera = videos.find(
+    (dispositivo) => /back|rear|trasera|environment/i.test(dispositivo.label) && !esGranAngular(dispositivo.label),
+  );
+  if (trasera) return trasera.deviceId;
+  const cualquiera = videos.find((dispositivo) => !esGranAngular(dispositivo.label));
+  return cualquiera?.deviceId;
+}
+
+function esGranAngular(etiqueta: string) {
+  return /ultra|wide|0\.5|gran angular/i.test(etiqueta);
+}
+
+async function enfocarCamaraPrincipal(pista: MediaStreamTrack | undefined) {
+  if (!pista) return;
+  const capacidades = pista.getCapabilities?.() as
+    | (MediaTrackCapabilities & {
+        zoom?: { min: number; max: number };
+        focusMode?: string[];
+      })
+    | undefined;
+  const zoom = capacidades?.zoom;
+  const pedidos: MediaTrackConstraintSet[] = [];
+  if (zoom) {
+    let objetivo = zoom.min;
+    if (zoom.min <= 0.6 && zoom.max >= 1) objetivo = 1;
+    else if (zoom.min <= 1 && zoom.max >= 2) objetivo = 2;
+    pedidos.push({ zoom: objetivo } as MediaTrackConstraintSet);
+  }
+  if (capacidades?.focusMode?.includes("continuous")) {
+    pedidos.push({ focusMode: "continuous" } as MediaTrackConstraintSet);
+  }
+  for (const pedido of pedidos) {
+    try {
+      await pista.applyConstraints({ advanced: [pedido] });
+    } catch {
+      // El celular no deja cambiar ese ajuste. La cámara sigue abierta.
+    }
+  }
 }
 
 function tagDeLectura(texto: string) {

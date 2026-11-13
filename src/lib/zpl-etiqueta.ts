@@ -49,22 +49,28 @@ function campo(valor: string) {
   return valor.replace(/[\^~\\]/g, " ").replace(/[\r\n]/g, " ");
 }
 
-/** Cada módulo mide 3 puntos de ancho, igual que antes, y 4 de alto. */
+/**
+ * El ancho llena la columna derecha, como la etiqueta grande.
+ * El alto de cada módulo es mayor que el ancho: el QR crece solo hacia arriba y abajo.
+ */
 function qrZpl(texto: string, x: number, altoEtiqueta: number) {
   const qr = encode(texto, { ecc: "H", border: 2 });
-  const celdaAncho = 3;
-  const celdaAlto = 4;
-  const alto = qr.size * celdaAlto;
-  const y = Math.max(4, Math.round((altoEtiqueta - alto) / 2));
+  const anchoDisponible = ANCHO - x - 2;
+  const altoDisponible = altoEtiqueta - 8;
+  const celdaAncho = Math.max(3, Math.floor(anchoDisponible / qr.size));
+  const celdaAlto = Math.max(celdaAncho + 1, Math.floor((celdaAncho * 6) / 5));
+  const alto = qr.size * Math.min(celdaAlto, Math.floor(altoDisponible / qr.size));
+  const celdaAltoFinal = Math.max(celdaAncho, Math.round(alto / qr.size));
+  const y = Math.max(4, Math.round((altoEtiqueta - qr.size * celdaAltoFinal) / 2));
   const comandos: string[] = [];
   for (let fila = 0; fila < qr.size; fila += 1) {
     let inicio = -1;
     const cerrar = (hasta: number) => {
       if (inicio < 0) return;
       const px = x + inicio * celdaAncho;
-      const py = y + fila * celdaAlto;
+      const py = y + fila * celdaAltoFinal;
       const ancho = (hasta - inicio) * celdaAncho;
-      comandos.push(`^FO${px},${py}^GB${ancho},${celdaAlto},${celdaAlto + 1}^FS`);
+      comandos.push(`^FO${px},${py}^GB${ancho},${celdaAltoFinal},${celdaAltoFinal + 1}^FS`);
       inicio = -1;
     };
     for (let columna = 0; columna < qr.size; columna += 1) {
