@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { loteActualDesdeQr, loteActualDesdeTag, type LoteLeido } from "@/app/actions";
-import { cargarImagen, decodificarImagen, decodificarVideo } from "@/components/decodificar-imagen-qr";
+import {
+  cargarImagen,
+  decodificarImagen,
+  decodificarPixeles,
+} from "@/components/decodificar-imagen-qr";
 import { tagDePdfEtiqueta } from "@/lib/pdf-etiqueta";
 
 export function EscanerSalida({
@@ -35,17 +39,13 @@ export function EscanerSalida({
   useEffect(() => {
     if (!camara || !videoRef.current || !streamRef.current) return;
     const video = videoRef.current;
-    const stream = streamRef.current;
-    video.srcObject = stream;
-    void video.play().then(() => enfocarCamaraPrincipal(stream.getVideoTracks()[0]));
-    const detector = crearDetectorQr();
+    video.srcObject = streamRef.current;
+    void video.play();
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     let vivo = true;
     let ocupado = false;
     let espera = 0;
-    let modo = 0;
-    const reenfocar = window.setTimeout(() => {
-      void enfocarCamaraPrincipal(streamRef.current?.getVideoTracks()[0]);
-    }, 700);
 
     const cerrar = () => {
       streamRef.current?.getTracks().forEach((pista) => pista.stop());
@@ -56,20 +56,18 @@ export function EscanerSalida({
     const tick = async () => {
       if (!vivo || ocupado) return;
       try {
-        if (video.readyState >= 2 && video.videoWidth > 0) {
-          let texto: string | null = null;
-          if (detector) {
-            try {
-              const codigos = await detector.detect(video);
-              texto = codigos.find((codigo) => codigo.rawValue)?.rawValue ?? null;
-            } catch {
-              texto = null;
-            }
-          }
-          if (!texto) {
-            texto = decodificarVideo(video, modo);
-            modo += 1;
-          }
+        if (video.readyState >= 2 && ctx && video.videoWidth > 0) {
+          const lado = Math.round(Math.min(video.videoWidth, video.videoHeight) * 0.72);
+          const sx = Math.round((video.videoWidth - lado) / 2);
+          const sy = Math.round((video.videoHeight - lado) / 2);
+          const maxLado = 1200;
+          const escala = lado > maxLado ? maxLado / lado : 1;
+          const width = Math.max(1, Math.round(lado * escala));
+          canvas.width = width;
+          canvas.height = width;
+          ctx.drawImage(video, sx, sy, lado, lado, 0, 0, width, width);
+          const datos = ctx.getImageData(0, 0, width, width);
+          const texto = decodificarPixeles(datos.data, width, width);
           const tag = texto ? tagDeLectura(texto) : null;
           if (texto && /TOKEN:\s*ML/i.test(texto)) {
             ocupado = true;
@@ -113,7 +111,6 @@ export function EscanerSalida({
     return () => {
       vivo = false;
       window.clearTimeout(espera);
-      window.clearTimeout(reenfocar);
     };
   }, [camara]);
 
@@ -311,22 +308,6 @@ export function EscanerSalida({
   );
 }
 
-function crearDetectorQr() {
-  const Api = (
-    window as unknown as {
-      BarcodeDetector?: new (opciones: { formats: string[] }) => {
-        detect: (origen: CanvasImageSource) => Promise<{ rawValue?: string }[]>;
-      };
-    }
-  ).BarcodeDetector;
-  if (!Api) return null;
-  try {
-    return new Api({ formats: ["qr_code"] });
-  } catch {
-    return null;
-  }
-}
-
 async function abrirCamaraPrincipal() {
   const pedido = {
     audio: false,
@@ -337,27 +318,25 @@ async function abrirCamaraPrincipal() {
     },
   };
   const stream = await navigator.mediaDevices.getUserMedia(pedido);
+  const principal = await idCamaraPrincipal();
   const actual = stream.getVideoTracks()[0]?.getSettings().deviceId;
-  const dispositivos = await navigator.mediaDevices.enumerateDevices();
-  const etiqueta = dispositivos.find((dispositivo) => dispositivo.deviceId === actual)?.label ?? "";
-  if (!esGranAngular(etiqueta)) return stream;
-  const otra = dispositivos.find(
-    (dispositivo) =>
-      dispositivo.kind === "videoinput" &&
-      dispositivo.deviceId !== actual &&
-      /back|rear|trasera|facing back/i.test(dispositivo.label) &&
-      !esGranAngular(dispositivo.label),
-  );
-  if (!otra) return stream;
+  if (!principal || principal === actual) return stream;
   stream.getTracks().forEach((pista) => pista.stop());
-  try {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: { deviceId: { exact: otra.deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-    });
-  } catch {
-    return navigator.mediaDevices.getUserMedia(pedido);
-  }
+  return navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: { deviceId: { exact: principal }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+  });
+}
+
+async function idCamaraPrincipal() {
+  const dispositivos = await navigator.mediaDevices.enumerateDevices();
+  const videos = dispositivos.filter((dispositivo) => dispositivo.kind === "videoinput" && dispositivo.label);
+  const trasera = videos.find(
+    (dispositivo) => /back|rear|trasera|environment/i.test(dispositivo.label) && !esGranAngular(dispositivo.label),
+  );
+  if (trasera) return trasera.deviceId;
+  const cualquiera = videos.find((dispositivo) => !esGranAngular(dispositivo.label));
+  return cualquiera?.deviceId;
 }
 
 function esGranAngular(etiqueta: string) {
