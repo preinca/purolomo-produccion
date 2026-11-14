@@ -6,6 +6,7 @@ const RUTAS_CONSULTA = [
   "/inventario",
   "/nomenclatura",
   "/logistica",
+  "/registro-entrada",
   "/pesajes",
   "/minilotes",
   "/consulta-pesaje",

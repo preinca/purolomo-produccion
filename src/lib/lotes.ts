@@ -125,8 +125,8 @@ export function validarRecepcion(input: {
   }
 
   if (!fechaValida(fecha)) return { ok: false, error: "Indica una fecha válida." };
-  if (!/^\d{4,8}$/.test(tag)) {
-    return { ok: false, error: "El TAG debe ser un número de 4 a 8 dígitos." };
+  if (!/^\d{6}$/.test(tag)) {
+    return { ok: false, error: "El TAG debe ser un número de 6 dígitos." };
   }
   const producto = productoPorCodigo(codigo);
   if (!producto) return { ok: false, error: "Elige un tipo de materia prima del catálogo." };
@@ -216,6 +216,23 @@ export async function listarLotesDeProceso(db: Db, procesoId: number) {
 export async function listarLotesPorRecepcion(db: Db, limite = 1000) {
   const tope = Math.min(Math.max(limite, 1), 2000);
   const rows = await db.all<SqlRow>("SELECT * FROM lotes ORDER BY creado_en DESC, tag DESC LIMIT ?", tope);
+  return rows.map(filaLote);
+}
+
+/** Entradas en orden de registro: primero el día, luego la hora en que se guardó cada TAG. */
+export async function listarEntradas(db: Db, filtro: { codigo?: string; fecha?: string } = {}) {
+  const codigo = filtro.codigo?.trim() ?? "";
+  const fecha = filtro.fecha?.trim() ?? "";
+  const rows = await db.all<SqlRow>(
+    `SELECT * FROM lotes
+     WHERE (? = '' OR codigo = ?)
+       AND (? = '' OR fecha = ?)
+     ORDER BY fecha, creado_en, tag`,
+    codigo,
+    codigo,
+    fecha,
+    fecha,
+  );
   return rows.map(filaLote);
 }
 

@@ -8,17 +8,15 @@ import {
   ArrowUpFromLine,
   ClipboardList,
   FileSpreadsheet,
-  History,
+  Inbox,
   LayoutDashboard,
   Menu,
-  PackageSearch,
   QrCode,
   FileSearch,
   Rows3,
   Search,
   Truck,
   Tag,
-  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -35,7 +33,6 @@ const grupos = [
     titulo: "Principal",
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: todos },
-      { href: "/stock", label: "Stock disponible", icon: PackageSearch, roles: todos },
     ],
   },
   {
@@ -43,23 +40,16 @@ const grupos = [
     items: [
       { href: "/inventario", label: "Catálogo CDM", icon: ClipboardList, roles: todos },
       { href: "/entradas", label: "Registrar entradas", icon: ArrowDownToLine, roles: ["administrador", "recepcionista"] as Rango[] },
-      { href: "/receta", label: "Cargar receta", icon: FileSpreadsheet, roles: ["administrador"] as Rango[] },
       { href: "/salidas", label: "Registrar salidas", icon: ArrowUpFromLine, roles: ["administrador", "pesador"] as Rango[] },
+      { href: "/receta", label: "Cargar receta", icon: FileSpreadsheet, roles: ["administrador"] as Rango[] },
       { href: "/logistica", label: "Registro de Logística", icon: Truck, roles: todos },
+      { href: "/registro-entrada", label: "Registro de entrada", icon: Inbox, roles: todos },
       { href: "/pesajes", label: "Registro de pesajes", icon: Rows3, roles: todos },
       { href: "/minilotes", label: "Buscar mini lote", icon: Search, roles: todos },
       { href: "/consulta-pesaje", label: "Buscar pesaje", icon: FileSearch, roles: todos },
-      { href: "/qr", label: "Consultar Qrs", icon: QrCode, roles: todos },
+      { href: "/qr", label: "Buscar TAG", icon: QrCode, roles: todos },
       { href: "/etiquetas", label: "Etiquetas en Cava", icon: Tag, roles: todos },
-      { href: "/eliminar", label: "Eliminar lote", icon: Trash2, roles: ["administrador"] as Rango[] },
       { href: "/usuarios", label: "Usuarios", icon: Users, roles: ["administrador"] as Rango[] },
-    ],
-  },
-  {
-    titulo: "Historiales",
-    items: [
-      { href: "/historial/entradas", label: "Hist. entradas", icon: History, roles: todos },
-      { href: "/historial/salidas", label: "Hist. salidas", icon: History, roles: todos },
     ],
   },
 ];

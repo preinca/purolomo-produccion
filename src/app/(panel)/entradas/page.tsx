@@ -17,7 +17,7 @@ import { TablaLotes } from "@/components/tabla-lotes";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDb } from "@/lib/db";
 import { fechaHoy, semanaDe } from "@/lib/formato";
-import { listarLotes, listarLotesDeProceso, siguienteTag } from "@/lib/lotes";
+import { listarLotes, listarLotesDeProceso } from "@/lib/lotes";
 import { procesoAbierto, procesosPorImprimir } from "@/lib/proceso-recepcion";
 import { PRODUCTOS_MPC } from "@/lib/mpc";
 
@@ -48,11 +48,10 @@ async function Entradas({
   const aviso = (Array.isArray(parametros.aviso) ? parametros.aviso[0] : parametros.aviso ?? "").trim();
   const tono = (Array.isArray(parametros.tono) ? parametros.tono[0] : parametros.tono ?? "").trim();
   const db = getDb();
-  const [proceso, porImprimir, recientes, tagSugerido] = await Promise.all([
+  const [proceso, porImprimir, recientes] = await Promise.all([
     procesoAbierto(db),
     procesosPorImprimir(db),
     listarLotes(db, { limite: 12 }),
-    siguienteTag(db),
   ]);
   const [delProceso, listas] = await Promise.all([
     proceso ? listarLotesDeProceso(db, proceso.id) : Promise.resolve([]),
@@ -233,7 +232,7 @@ async function Entradas({
           <CardHeader>
             <CardTitle>Nueva recepción</CardTitle>
             <CardDescription>
-              El TAG se sugiere solo. Puedes cambiarlo si la paleta ya trae número. Si ese TAG ya está registrado, no se puede volver a usar.
+              Escribe el TAG de la paleta: un número de 6 dígitos. Si ese TAG ya está registrado, no se puede volver a usar.
               La semana se puede escribir; hoy corresponde a la {semanaDe(fechaHoy()).toLowerCase()}.
             </CardDescription>
           </CardHeader>
@@ -241,7 +240,6 @@ async function Entradas({
             <EntradaForm
               hoy={fechaHoy()}
               semanaSugerida={semanaDe(fechaHoy()).replace(/\D/g, "") || "45"}
-              tagSugerido={tagSugerido}
               productos={PRODUCTOS_MPC}
             />
           </CardContent>

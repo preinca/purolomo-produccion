@@ -12,7 +12,7 @@ import { fichasQrPesajes, retirosDeTags } from "@/lib/pesajes";
 export default function Page({ searchParams }: PageProps<"/qr">) {
   return (
     <PageFrame
-      titulo="Consultar Qrs"
+      titulo="Buscar TAG"
       descripcion="Elige si quieres ver los QR de la materia prima que está en cava o los QR de cada pesaje."
       acciones={<BotonImprimir />}
     >

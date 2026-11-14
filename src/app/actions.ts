@@ -345,7 +345,7 @@ export async function guardarObservacionPesajeFormulario(
 export async function revisarTagEntrada(tag: string): Promise<string | null> {
   await exigirRango(["administrador", "recepcionista"]);
   const limpio = tag.trim();
-  if (!/^\d{4,8}$/.test(limpio)) return null;
+  if (!/^\d{6}$/.test(limpio)) return null;
   const existe = await getDb().get("SELECT tag FROM lotes WHERE tag = ?", limpio);
   return existe ? `El TAG ${limpio} ya está registrado.` : null;
 }

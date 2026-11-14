@@ -11,12 +11,10 @@ import type { ProductoMpc } from "@/lib/mpc";
 export function EntradaForm({
   hoy,
   semanaSugerida,
-  tagSugerido,
   productos,
 }: {
   hoy: string;
   semanaSugerida: string;
-  tagSugerido: string;
   productos: ProductoMpc[];
 }) {
   const [estado, accion, pendiente] = useActionState<EstadoFormulario, FormData>(
@@ -30,7 +28,6 @@ export function EntradaForm({
         key={estado?.ok ? estado.tag : "form"}
         hoy={hoy}
         semanaSugerida={semanaSugerida}
-        tagSugerido={tagSugerido}
         productos={productos}
         accion={accion}
         pendiente={pendiente}
@@ -42,7 +39,7 @@ export function EntradaForm({
       ) : null}
       {estado?.ok ? (
         <p role="status" className="text-sm">
-          Lote {estado.tag} guardado en SQLite. El QR ya está listo en Consultar Qrs.
+          Lote {estado.tag} guardado en SQLite. El QR ya está listo en Buscar TAG.
         </p>
       ) : null}
     </div>
@@ -52,26 +49,24 @@ export function EntradaForm({
 function Campos({
   hoy,
   semanaSugerida,
-  tagSugerido,
   productos,
   accion,
   pendiente,
 }: {
   hoy: string;
   semanaSugerida: string;
-  tagSugerido: string;
   productos: ProductoMpc[];
   accion: (payload: FormData) => void;
   pendiente: boolean;
 }) {
   const [codigo, setCodigo] = useState("");
-  const [tag, setTag] = useState(tagSugerido);
+  const [tag, setTag] = useState("");
   const [ocupado, setOcupado] = useState<string | null>(null);
   const elegido = productos.find((p) => p.codigo === codigo) ?? null;
 
   useEffect(() => {
     const limpio = tag.trim();
-    if (!/^\d{4,8}$/.test(limpio)) {
+    if (!/^\d{6}$/.test(limpio)) {
       setOcupado(null);
       return;
     }
@@ -123,9 +118,12 @@ function Campos({
             name="tag"
             required
             inputMode="numeric"
+            minLength={6}
+            maxLength={6}
+            pattern="\d{6}"
             value={tag}
-            onChange={(event) => setTag(event.target.value)}
-            placeholder="Número de paleta"
+            onChange={(event) => setTag(event.target.value.replace(/\D/g, "").slice(0, 6))}
+            placeholder="6 dígitos"
           />
         </Campo>
         <Campo label="Kg recibidos" htmlFor="kg_recibidos">
