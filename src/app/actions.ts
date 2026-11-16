@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb, type Db } from "@/lib/db";
-import { fechaHoy, fechaValida, formatoKg } from "@/lib/formato";
+import { fechaHoy, fechaValida } from "@/lib/formato";
 import {
   buscarLote,
   eliminarLote,
@@ -20,7 +20,7 @@ import {
 import { destinoValido } from "@/lib/destinos";
 import { lineaPorId } from "@/lib/lineas";
 import { productoPorCodigo } from "@/lib/mpc";
-import { abrirPesaje, buscarMiniLote, buscarPesaje, consumirEnPesaje, eliminarPesajeEnCurso, faltantesDeReceta, finalizarPesaje, guardarObservacionPesaje, quitarKgDePesaje, retirosDeTag, siguienteNumero, tagsDelTipo } from "@/lib/pesajes";
+import { abrirPesaje, buscarMiniLote, buscarPesaje, consumirEnPesaje, eliminarPesajeEnCurso, finalizarPesaje, guardarObservacionPesaje, quitarKgDePesaje, retirosDeTag, siguienteNumero, tagsDelTipo } from "@/lib/pesajes";
 import { leerConsumoQr, leerTextoQr } from "@/lib/qr";
 import { encolarEtiquetasDelProceso } from "@/lib/impresion";
 import {
@@ -175,19 +175,6 @@ export async function cargarRecetaAlibal(
   const leida = leerRecetaExcel(Buffer.from(await archivo.arrayBuffer()), linea);
   if (!leida.ok) return { error: leida.error };
   const db = getDb();
-  const faltantes = await faltantesDeReceta(db, leida.value.items);
-  if (faltantes.length > 0) {
-    const detalle = faltantes
-      .map((item) =>
-        item.disponible <= 0.001
-          ? `${item.tipo} pide ${formatoKg(item.pedido)} y no hay stock`
-          : `${item.tipo} pide ${formatoKg(item.pedido)} y hay ${formatoKg(item.disponible)}`,
-      )
-      .join(". ");
-    return {
-      error: `No se cargó el Excel. No hay stock suficiente para esta fórmula de Alibal. ${detalle}.`,
-    };
-  }
   await guardarReceta(db, leida.value, linea);
   refrescar();
   redirect("/receta");
