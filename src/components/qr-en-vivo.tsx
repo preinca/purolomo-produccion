@@ -9,8 +9,10 @@ import type { RetiroEnQr } from "@/lib/qr";
 
 export function QrEnVivo({
   etiquetas,
+  puedeEliminar = false,
 }: {
   etiquetas: { lote: Lote; retiros: RetiroEnQr[] }[];
+  puedeEliminar?: boolean;
 }) {
   const [texto, setTexto] = useState("");
   const consulta = texto.trim();
@@ -46,7 +48,12 @@ export function QrEnVivo({
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {visibles.map((item) => (
-            <QrEtiqueta key={item.lote.tag} lote={item.lote} retiros={item.retiros} />
+            <QrEtiqueta
+              key={item.lote.tag}
+              lote={item.lote}
+              retiros={item.retiros}
+              puedeEliminar={puedeEliminar}
+            />
           ))}
         </div>
       )}

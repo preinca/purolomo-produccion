@@ -4,6 +4,7 @@ import { EliminarEnVivo } from "@/components/eliminar-en-vivo";
 import { PageFrame } from "@/components/page-frame";
 import { getDb } from "@/lib/db";
 import { kgConsumidosDe, kgDisponiblesDe, listarLotes } from "@/lib/lotes";
+import { exigirAdmin } from "@/lib/usuarios";
 
 export default function Page({
   searchParams,
@@ -12,8 +13,8 @@ export default function Page({
 }) {
   return (
     <PageFrame
-      titulo="Eliminar lote"
-      descripcion="Escribe parte del TAG. Las paletas aparecen mientras escribes y después confirmas."
+      titulo="Eliminar TAG"
+      descripcion="Solo el administrador puede borrar un TAG generado antes. Busca la paleta, confirma y se elimina con su historial."
     >
       <Suspense fallback={<p className="text-sm text-muted-foreground">Cargando…</p>}>
         <Eliminar searchParams={searchParams} />
@@ -32,6 +33,7 @@ async function Eliminar({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await connection();
+  await exigirAdmin();
   const parametros = await searchParams;
   const eliminado = texto(parametros.eliminado).trim();
   const lotes = (await listarLotes(getDb(), { limite: 300 })).map((lote) => ({

@@ -1,9 +1,18 @@
+import { BotonEliminarTag } from "@/components/boton-eliminar-tag";
 import { formatoFecha, formatoKg } from "@/lib/formato";
 import { kgConsumidosDe, kgDisponiblesDe, tagAgotado, type Lote } from "@/lib/lotes";
 import { productoPorCodigo } from "@/lib/mpc";
 import { svgQrEnPantalla, type RetiroEnQr } from "@/lib/qr";
 
-export function QrEtiqueta({ lote, retiros = [] }: { lote: Lote; retiros?: RetiroEnQr[] }) {
+export function QrEtiqueta({
+  lote,
+  retiros = [],
+  puedeEliminar = false,
+}: {
+  lote: Lote;
+  retiros?: RetiroEnQr[];
+  puedeEliminar?: boolean;
+}) {
   const tipo = productoPorCodigo(lote.codigo);
   const svg = svgQrEnPantalla(lote.tag);
   return (
@@ -62,7 +71,7 @@ export function QrEtiqueta({ lote, retiros = [] }: { lote: Lote; retiros?: Retir
           ))}
         </ul>
       ) : null}
-      <div className="mt-3 print:hidden">
+      <div className="mt-3 flex flex-wrap items-start gap-2 print:hidden">
         <a
           href={`/qr/imagen/${lote.tag}`}
           download={`qr-${lote.tag}.png`}
@@ -70,6 +79,7 @@ export function QrEtiqueta({ lote, retiros = [] }: { lote: Lote; retiros?: Retir
         >
           Descargar QR
         </a>
+        {puedeEliminar ? <BotonEliminarTag tag={lote.tag} /> : null}
       </div>
     </article>
   );

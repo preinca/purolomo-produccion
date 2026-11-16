@@ -509,7 +509,7 @@ export async function eliminarLoteFormulario(
   if (!resultado.ok) return { error: resultado.error };
   refrescar();
   revalidatePath(`/lote/${tag}`);
-  redirect(`/eliminar?eliminado=${encodeURIComponent(tag)}`);
+  redirect(`/qr?eliminado=${encodeURIComponent(tag)}`);
 }
 
 export async function crearConsumo(

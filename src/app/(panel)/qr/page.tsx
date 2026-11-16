@@ -8,6 +8,7 @@ import { QrPesaje } from "@/components/qr-pesaje";
 import { getDb } from "@/lib/db";
 import { listarLotes } from "@/lib/lotes";
 import { fichasQrPesajes, retirosDeTags } from "@/lib/pesajes";
+import { leerSesion } from "@/lib/usuarios";
 
 export default function Page({ searchParams }: PageProps<"/qr">) {
   return (
@@ -31,10 +32,17 @@ async function Contenido({
   await connection();
   const parametros = await searchParams;
   const vista = leer(parametros.vista) === "pesajes" ? "pesajes" : "cava";
+  const eliminado = leer(parametros.eliminado).trim();
+  const esAdmin = (await leerSesion())?.rango === "administrador";
   const db = getDb();
 
   return (
     <div className="grid gap-8">
+      {eliminado ? (
+        <p role="status" className="max-w-xl rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          El TAG {eliminado} quedó eliminado.
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-3 print:hidden">
         <a
           href="/qr"
@@ -66,7 +74,7 @@ async function Contenido({
     return (
       <>
         <LectorQr />
-        <QrEnVivo etiquetas={etiquetas} />
+        <QrEnVivo etiquetas={etiquetas} puedeEliminar={esAdmin} />
       </>
     );
   }
