@@ -35,6 +35,27 @@ export async function encolarEtiquetasDelProceso(db: Db, procesoId: number): Pro
   });
 }
 
+/** Encola un TAG suelto para la impresora Zebra (permite reimprimir). */
+export async function encolarEtiquetaTag(db: Db, tag: string): Promise<Resultado> {
+  const limpio = tag.trim();
+  if (!limpio) return { ok: false, error: "Indica el TAG a imprimir." };
+  return db.transaction(async (tx) => {
+    const lote = await tx.get<{ tag: string; impresa_en: string }>(
+      "SELECT tag, impresa_en FROM lotes WHERE tag = ? FOR UPDATE",
+      limpio,
+    );
+    if (!lote) return { ok: false, error: "No existe ese TAG." };
+    if (String(lote.impresa_en).startsWith("cola:")) {
+      return { ok: false, error: `El TAG ${limpio} ya está en cola de impresión.` };
+    }
+    const creada = await tx.get<{ id: number }>("INSERT INTO impresiones (estado) VALUES ('pendiente') RETURNING id");
+    const id = Number(creada?.id);
+    await tx.run("INSERT INTO impresion_items (impresion_id, tag, orden) VALUES (?, ?, ?)", id, limpio, 0);
+    await tx.run("UPDATE lotes SET impresa_en = ? WHERE tag = ?", `cola:${id}`, limpio);
+    return { ok: true, value: undefined };
+  });
+}
+
 export async function tomarImpresion(db: Db): Promise<{ id: number; zpl: string } | null> {
   const ahora = new Date().toISOString();
   const vencida = new Date(Date.now() - 2 * 60 * 1000).toISOString();

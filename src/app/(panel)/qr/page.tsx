@@ -33,7 +33,9 @@ async function Contenido({
   const parametros = await searchParams;
   const vista = leer(parametros.vista) === "pesajes" ? "pesajes" : "cava";
   const eliminado = leer(parametros.eliminado).trim();
-  const esAdmin = (await leerSesion())?.rango === "administrador";
+  const rango = (await leerSesion())?.rango;
+  const esAdmin = rango === "administrador";
+  const puedeImprimir = rango === "administrador" || rango === "recepcionista";
   const db = getDb();
 
   return (
@@ -74,7 +76,7 @@ async function Contenido({
     return (
       <>
         <LectorQr />
-        <QrEnVivo etiquetas={etiquetas} puedeEliminar={esAdmin} />
+        <QrEnVivo etiquetas={etiquetas} puedeEliminar={esAdmin} puedeImprimir={puedeImprimir} />
       </>
     );
   }

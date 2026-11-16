@@ -1,4 +1,5 @@
 import { BotonEliminarTag } from "@/components/boton-eliminar-tag";
+import { BotonImprimirZebra } from "@/components/boton-imprimir-zebra";
 import { formatoFecha, formatoKg } from "@/lib/formato";
 import { kgConsumidosDe, kgDisponiblesDe, tagAgotado, type Lote } from "@/lib/lotes";
 import { productoPorCodigo } from "@/lib/mpc";
@@ -8,10 +9,12 @@ export function QrEtiqueta({
   lote,
   retiros = [],
   puedeEliminar = false,
+  puedeImprimir = false,
 }: {
   lote: Lote;
   retiros?: RetiroEnQr[];
   puedeEliminar?: boolean;
+  puedeImprimir?: boolean;
 }) {
   const tipo = productoPorCodigo(lote.codigo);
   const svg = svgQrEnPantalla(lote.tag);
@@ -79,6 +82,7 @@ export function QrEtiqueta({
         >
           Descargar QR
         </a>
+        {puedeImprimir ? <BotonImprimirZebra tag={lote.tag} /> : null}
         {puedeEliminar ? <BotonEliminarTag tag={lote.tag} /> : null}
       </div>
     </article>

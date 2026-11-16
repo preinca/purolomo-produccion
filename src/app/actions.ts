@@ -22,7 +22,7 @@ import { lineaPorId } from "@/lib/lineas";
 import { productoPorCodigo } from "@/lib/mpc";
 import { abrirPesaje, buscarMiniLote, buscarPesaje, consumirEnPesaje, eliminarPesajeEnCurso, finalizarPesaje, guardarObservacionPesaje, quitarKgDePesaje, retirosDeTag, siguienteNumero, tagsDelTipo } from "@/lib/pesajes";
 import { leerConsumoQr, leerTextoQr } from "@/lib/qr";
-import { encolarEtiquetasDelProceso } from "@/lib/impresion";
+import { encolarEtiquetaTag, encolarEtiquetasDelProceso } from "@/lib/impresion";
 import {
   asignarAlProceso,
   eliminarEntradaEnCurso,
@@ -456,6 +456,19 @@ export async function imprimirEtiquetasPendientes(formData: FormData) {
     : resultado.error;
   refrescar();
   redirect(`/entradas?aviso=${encodeURIComponent(aviso)}`);
+}
+
+export async function imprimirEtiquetaZebra(
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  await exigirRango(["administrador", "recepcionista"]);
+  const tag = texto(formData, "tag").trim();
+  const resultado = await encolarEtiquetaTag(getDb(), tag);
+  if (!resultado.ok) return { error: resultado.error };
+  refrescar();
+  revalidatePath("/qr");
+  return { ok: true, tag };
 }
 
 export async function validarTransferencia(formData: FormData) {

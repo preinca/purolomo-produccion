@@ -10,9 +10,11 @@ import type { RetiroEnQr } from "@/lib/qr";
 export function QrEnVivo({
   etiquetas,
   puedeEliminar = false,
+  puedeImprimir = false,
 }: {
   etiquetas: { lote: Lote; retiros: RetiroEnQr[] }[];
   puedeEliminar?: boolean;
+  puedeImprimir?: boolean;
 }) {
   const [texto, setTexto] = useState("");
   const consulta = texto.trim();
@@ -53,6 +55,7 @@ export function QrEnVivo({
               lote={item.lote}
               retiros={item.retiros}
               puedeEliminar={puedeEliminar}
+              puedeImprimir={puedeImprimir}
             />
           ))}
         </div>
