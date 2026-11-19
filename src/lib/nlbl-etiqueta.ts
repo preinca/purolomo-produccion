@@ -8,7 +8,7 @@ const CLAVE = ",^_A5Fus&!?j='Epiq*e";
 const ESCALA_BASE = 151.409306798409;
 const ANCHO = 57000;
 const ALTO = 32000;
-const VERSION_ZEBRA_33 = 46;
+const VERSION_ZEBRA_33 = 42;
 
 export function nlblDeEtiqueta(etiqueta: EtiquetaCava, textoDelQr: string) {
   const formato = ajustarPlantilla(fs.readFileSync(rutaPlantilla("formato-qr.xml"), "utf8")).replace(

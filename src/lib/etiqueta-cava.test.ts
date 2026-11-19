@@ -46,7 +46,7 @@ test("el nlbl de la etiqueta usa la plantilla de Zebra y los datos del lote", ()
   assert.equal(modo.readUInt16LE(80), 320);
   assert.equal(modo.readUInt16LE(82), 570);
   const solucion = solucionDeEtiqueta(archivo);
-  assert.match(solucion, /<FileVersion>46<\/FileVersion>/);
+  assert.match(solucion, /<FileVersion>42<\/FileVersion>/);
   assert.equal(solucion.includes("<FileVersion>50</FileVersion>"), false);
   assert.match(xml, /400123/);
   assert.match(xml, /CDM SP CH/);
